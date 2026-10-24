@@ -1,0 +1,9 @@
+node_modules
+.next
+.env*.local
+.env
+supabase/seed.private.sql
+data/sheet-import.ts
+sample-out
+*.tsbuildinfo
+next-env.d.ts
