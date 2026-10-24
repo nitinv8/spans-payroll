@@ -151,7 +151,7 @@ create table if not exists payroll_lines (
 create index if not exists payroll_lines_employee on payroll_lines(employee_id);
 
 -- Finalized months are locked at the database level
-create or replace function lock_finalized_lines() returns trigger language plpgsql as $$
+create or replace function lock_finalized_lines() returns trigger language plpgsql set search_path = public as $$
 declare s text;
 begin
   select status into s from payroll_runs where id = coalesce(new.run_id, old.run_id);
@@ -201,7 +201,7 @@ begin
 end $$;
 
 -- updated_at helpers
-create or replace function touch_updated_at() returns trigger language plpgsql as $$
+create or replace function touch_updated_at() returns trigger language plpgsql set search_path = public as $$
 begin new.updated_at = now(); return new; end $$;
 drop trigger if exists trg_touch_emp on employees;
 create trigger trg_touch_emp before update on employees for each row execute function touch_updated_at();
