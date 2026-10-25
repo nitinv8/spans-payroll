@@ -4,7 +4,8 @@ import { Fragment, useState, useTransition } from "react";
 import { saveLine } from "@/app/actions";
 import { inr, CATEGORY_LABEL, type FormulaRow, type Category } from "@/lib/payroll";
 import type { LineRow } from "@/lib/exports";
-import SendSlip, { type Contact } from "@/components/SendSlip";
+import type { Contact } from "@/components/SendSlip";
+import RowMenu from "@/components/RowMenu";
 
 const INPUTS = [
   ["working_days", "Worked", false], ["paid_offs", "Offs", false], ["leaves", "Leaves", false], ["lop_days", "LOP", false],
@@ -55,9 +56,9 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
       <table>
         <thead>
           <tr>
-            <th>#</th><th>Employee</th>
+            <th aria-label="Actions" style={{ width: 36 }}></th><th>#</th><th>Employee</th>
             {INPUTS.map(([k, l]) => <th key={k} className="num">{l}</th>)}
-            <th className="num">Gross</th><th className="num">Deductions</th><th className="num">In hand</th><th className="num">CTC</th><th></th>
+            <th className="num">Gross</th><th className="num">Deductions</th><th className="num">In hand</th><th className="num">CTC</th>
           </tr>
         </thead>
         <tbody>
@@ -66,9 +67,16 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
             return (
               <Fragment key={l.id}>
                 <tr onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) save(l.id); }}>
+                  <td className="menu-cell">
+                    <RowMenu target={{ lineId: l.id, name: l.snapshot.name, month, netPay: l.net_pay,
+                        contact: contacts[(l as LineRow & { employee_id: string }).employee_id] || { email: null, mobile: null } }}
+                      disabled={!!l.error} detailsOpen={open === l.id} onToggleDetails={() => setOpen(open === l.id ? null : l.id)}
+                      onNote={(msg) => setStatus((s) => (s[l.id] === msg ? s : { ...s, [l.id]: msg }))} />
+                  </td>
                   <td className="mono">{l.print_code}</td>
                   <td>
-                    <div><b>{l.snapshot.name}</b></div>
+                    <button type="button" className="namelink" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)}
+                      title={open === l.id ? "Hide details" : "Show details"}>{l.snapshot.name}</button>
                     <div className="muted small">{l.snapshot.designation} · {l.snapshot.location} · {total} days</div>
                     {l.error && <div className="small" style={{ color: "var(--bad)" }}>{l.error}</div>}
                     {status[l.id] && <div className="small muted">{status[l.id]}</div>}
@@ -85,20 +93,12 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
                   <td className="num">{inr(l.calc?.total_deductions)}</td>
                   <td className="num"><b>{inr(l.net_pay)}</b></td>
                   <td className="num">{inr(l.ctc)}</td>
-                  <td>
-                    <div className="row" style={{ flexWrap: "nowrap" }}>
-                      <button type="button" className="btn sm" onClick={() => setOpen(open === l.id ? null : l.id)}>{open === l.id ? "Hide" : "Details"}</button>
-                      <a className="btn sm" href={`/api/lines/${l.id}/slip`}>Slip</a>
-                      {!l.error && <SendSlip compact lineId={l.id} name={l.snapshot.name} month={month} netPay={l.net_pay}
-                        contact={contacts[(l as LineRow & { employee_id: string }).employee_id] || { email: null, mobile: null }} />}
-                    </div>
-                  </td>
                 </tr>
                 {open === l.id && (
                   <tr>
                     <td></td>
                     <td colSpan={INPUTS.length + 6} style={{ whiteSpace: "normal", background: "#fafbfc" }}>
-                      <div className="grid3" style={{ gap: 18 }}>
+                      <div className="grid3 details-panel" style={{ gap: 18 }}>
                         {groups.filter(([c]) => c !== "parameter").map(([c, fs]) => (
                           <div key={c}>
                             <h3>{CATEGORY_LABEL[c]}</h3>
@@ -139,10 +139,10 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
         </tbody>
         <tfoot>
           <tr>
-            <td></td><td>Total</td>
+            <td></td><td></td><td>Total</td>
             {INPUTS.map(([k, , money]) => <td key={k} className="num">{money ? inr(total(k)) : ""}</td>)}
             <td className="num">{inr(total("gross"))}</td><td className="num">{inr(total("total_deductions"))}</td>
-            <td className="num">{inr(total("net_pay"))}</td><td className="num">{inr(total("ctc"))}</td><td></td>
+            <td className="num">{inr(total("net_pay"))}</td><td className="num">{inr(total("ctc"))}</td>
           </tr>
         </tfoot>
       </table>

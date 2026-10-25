@@ -15,10 +15,11 @@ const waNumber = (m: string | null) => {
   return d || "";
 };
 
-export default function SendSlip({ lineId, name, month, netPay, contact, compact = false }: {
-  lineId: string; name: string; month: string; netPay: number | null; contact: Contact; compact?: boolean;
-}) {
-  const [busy, setBusy] = useState<"" | "email" | "wa">("");
+export type SlipTarget = { lineId: string; name: string; month: string; netPay: number | null; contact: Contact };
+
+/** Shared logic for downloading / emailing / WhatsApp-ing one payslip. */
+export function useSlipSender({ lineId, name, month, netPay, contact }: SlipTarget) {
+  const [busy, setBusy] = useState<"" | "email" | "wa" | "download">("");
   const [note, setNote] = useState("");
   const mLabel = monthLabel(month);
   const first = name.split(" ")[0];
@@ -39,6 +40,13 @@ export default function SendSlip({ lineId, name, month, netPay, contact, compact
     const a = document.createElement("a");
     a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  async function downloadOnly() {
+    setBusy("download"); setNote("");
+    try { download(await getFile()); }
+    catch (e) { setNote(`Couldn't prepare the slip: ${(e as Error).message}`); }
+    finally { setBusy(""); }
   }
 
   async function send(kind: "email" | "wa") {
@@ -78,6 +86,12 @@ export default function SendSlip({ lineId, name, month, netPay, contact, compact
     }
   }
 
+  return { send, downloadOnly, busy, note, setNote };
+}
+
+export default function SendSlip({ compact = false, ...target }: SlipTarget & { compact?: boolean }) {
+  const { send, busy, note } = useSlipSender(target);
+  const { contact } = target;
   return (
     <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
       <span className="row" style={{ flexWrap: "nowrap", gap: 4 }}>
