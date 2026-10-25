@@ -98,6 +98,18 @@ export async function saveStructure(form: FormData) {
   redirect(`/employees/${employee_id}?tab=salary&saved=1`);
 }
 
+/** Deletes an employee only if they have never appeared on a payroll (history must be kept). */
+export async function deleteEmployee(form: FormData) {
+  const { sb } = await db();
+  const id = String(form.get("id"));
+  const { count } = await sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("employee_id", id);
+  if (count) fail(`This employee is on ${count} payroll month(s), so they can't be deleted. Set their status to Inactive and add a last working date instead.`);
+  const { error } = await sb.from("employees").delete().eq("id", id);
+  if (error) fail(error.message.includes("foreign key") ? "This employee has payroll history, so they can't be deleted. Mark them Inactive instead." : error.message);
+  revalidatePath("/employees");
+  redirect("/employees?status=All&deleted=1");
+}
+
 export async function deleteStructure(form: FormData) {
   const { sb } = await db();
   const id = String(form.get("id")), employee_id = String(form.get("employee_id"));

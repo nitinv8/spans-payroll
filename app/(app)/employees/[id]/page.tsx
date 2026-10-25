@@ -4,7 +4,7 @@ import EmployeeForm from "@/components/EmployeeForm";
 import ConfirmButton from "@/components/Confirm";
 import { pageDb, fmtDate } from "@/lib/data";
 import { inr, monthLabel } from "@/lib/payroll";
-import { saveStructure, deleteStructure } from "@/app/actions";
+import { saveStructure, deleteStructure, deleteEmployee } from "@/app/actions";
 
 const COMPONENTS = [
   ["basic", "Basic"], ["hra", "HRA"], ["medical", "Medical"], ["conveyance", "Conveyance"], ["mobile", "Mobile"],
@@ -27,6 +27,7 @@ export default async function EmployeePage({ params, searchParams }: { params: {
     ? await sb.from("payroll_lines").select("id, run_id, gross, net_pay, ctc, incentive, manual_adjustment, working_days, paid_offs, leaves, lop_days, payroll_runs(month, status)").eq("employee_id", e.id)
     : { data: null };
   const sortedLines = (lines || []).sort((a: any, b: any) => (a.payroll_runs.month < b.payroll_runs.month ? 1 : -1));
+  const { count: paidMonths } = await sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("employee_id", e.id);
   const latest = structs?.[0];
   const base = searchParams.from ? structs?.find((s) => s.id === searchParams.from) : latest;
   const gross = (s: any) => COMPONENTS.reduce((a, [k]) => a + Number(s[k] || 0), 0);
@@ -48,7 +49,26 @@ export default async function EmployeePage({ params, searchParams }: { params: {
         <Link href={`?tab=payslips`} className={tab === "payslips" ? "active" : ""}>Payslips</Link>
       </div>
 
-      {tab === "details" && <EmployeeForm e={e} locations={locations} />}
+      {tab === "details" && (
+        <>
+          <EmployeeForm e={e} locations={locations} />
+          <div className="panel" style={{ marginTop: 24 }}>
+            <h2>Remove employee</h2>
+            {paidMonths ? (
+              <p className="muted" style={{ margin: 0 }}>
+                {e.name} is on {paidMonths} payroll month{paidMonths > 1 ? "s" : ""}, so the record is kept for history.
+                To remove them from future payrolls, set <b>Employment status</b> to Inactive and fill in the <b>Last date of employment</b>.
+              </p>
+            ) : (
+              <form action={deleteEmployee} className="row">
+                <input type="hidden" name="id" value={e.id} />
+                <span className="muted">Never paid through payroll, so this record can be deleted along with its salary structures, OT entries and bonus entries.</span>
+                <ConfirmButton className="btn danger" message={`Permanently delete ${e.name}? This can't be undone.`}>Delete employee</ConfirmButton>
+              </form>
+            )}
+          </div>
+        </>
+      )}
 
       {tab === "salary" && (
         <>
