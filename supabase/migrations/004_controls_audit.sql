@@ -110,3 +110,6 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function public.is_allowed() from public, anon;
 grant execute on function public.is_allowed() to authenticated;
+
+-- trigger function is never called directly
+revoke execute on function public.audit_trigger() from public, anon, authenticated;
