@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import EmployeeForm from "@/components/EmployeeForm";
 import ConfirmButton from "@/components/Confirm";
+import SendSlip from "@/components/SendSlip";
 import { pageDb, fmtDate } from "@/lib/data";
 import { inr, monthLabel } from "@/lib/payroll";
 import { saveStructure, deleteStructure, deleteEmployee } from "@/app/actions";
@@ -150,7 +151,8 @@ export default async function EmployeePage({ params, searchParams }: { params: {
                   <td className="num">{l.working_days}/{l.paid_offs}/{l.leaves}/{l.lop_days}</td>
                   <td className="num">{inr(l.gross)}</td><td className="num">{inr(l.incentive)}</td><td className="num">{inr(l.manual_adjustment)}</td>
                   <td className="num"><b>{inr(l.net_pay)}</b></td><td className="num">{inr(l.ctc)}</td>
-                  <td><a className="btn sm" href={`/api/lines/${l.id}/slip`}>Slip PDF</a></td>
+                  <td><div className="row" style={{ flexWrap: "nowrap" }}><a className="btn sm" href={`/api/lines/${l.id}/slip`}>Slip PDF</a>
+                    <SendSlip compact lineId={l.id} name={e.name} month={l.payroll_runs.month} netPay={l.net_pay} contact={{ email: e.email, mobile: e.mobile }} /></div></td>
                 </tr>
               ))}
               {!sortedLines.length && <tr><td colSpan={9} className="muted">No payslips yet.</td></tr>}

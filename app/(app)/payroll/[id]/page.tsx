@@ -20,6 +20,8 @@ export default async function RunPage({ params }: { params: { id: string } }) {
   const { data: emps } = await sb.from("employees").select("*");
   const { data: settings } = await sb.from("company_settings").select("orgzit").eq("id", 1).single();
   const formulas = run.formulas as FormulaRow[];
+  // Current contact details (personal email/mobile), used by the send-payslip buttons
+  const contacts = Object.fromEntries((emps || []).map((e) => [e.id, { email: e.email as string | null, mobile: e.mobile as string | null }]));
   const locked = run.status === "finalized";
 
   const present = new Set(lines.map((l) => l.employee_id));
@@ -116,7 +118,7 @@ export default async function RunPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      <LinesEditor key={lines.map((l) => `${l.id}:${(l as { updated_at?: string }).updated_at}:${l.net_pay}`).join("|") + run.status} lines={lines} formulas={formulas} locked={locked} month={run.month} runId={run.id} removeAction={removeLine} />
+      <LinesEditor key={lines.map((l) => `${l.id}:${(l as { updated_at?: string }).updated_at}:${l.net_pay}`).join("|") + run.status} lines={lines} formulas={formulas} locked={locked} month={run.month} runId={run.id} removeAction={removeLine} contacts={contacts} />
 
       <div className="panel" style={{ marginTop: 16 }}>
         <h2>PF / ESI / LWF summary</h2>

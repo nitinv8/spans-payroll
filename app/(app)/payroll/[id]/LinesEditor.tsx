@@ -4,6 +4,7 @@ import { Fragment, useState, useTransition } from "react";
 import { saveLine } from "@/app/actions";
 import { inr, CATEGORY_LABEL, type FormulaRow, type Category } from "@/lib/payroll";
 import type { LineRow } from "@/lib/exports";
+import SendSlip, { type Contact } from "@/components/SendSlip";
 
 const INPUTS = [
   ["working_days", "Worked", false], ["paid_offs", "Offs", false], ["leaves", "Leaves", false], ["lop_days", "LOP", false],
@@ -12,8 +13,9 @@ const INPUTS = [
 ] as const;
 type InputKey = (typeof INPUTS)[number][0];
 
-export default function LinesEditor({ lines: initial, formulas, locked, month, runId, removeAction }: {
+export default function LinesEditor({ lines: initial, formulas, locked, month, runId, removeAction, contacts }: {
   lines: LineRow[]; formulas: FormulaRow[]; locked: boolean; month: string; runId: string; removeAction: (f: FormData) => Promise<void>;
+  contacts: Record<string, Contact>;
 }) {
   const [lines, setLines] = useState(initial);
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
@@ -87,6 +89,8 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
                     <div className="row" style={{ flexWrap: "nowrap" }}>
                       <button type="button" className="btn sm" onClick={() => setOpen(open === l.id ? null : l.id)}>{open === l.id ? "Hide" : "Details"}</button>
                       <a className="btn sm" href={`/api/lines/${l.id}/slip`}>Slip</a>
+                      {!l.error && <SendSlip compact lineId={l.id} name={l.snapshot.name} month={month} netPay={l.net_pay}
+                        contact={contacts[(l as LineRow & { employee_id: string }).employee_id] || { email: null, mobile: null }} />}
                     </div>
                   </td>
                 </tr>
