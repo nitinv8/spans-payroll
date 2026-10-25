@@ -36,7 +36,10 @@ export default async function Dashboard() {
       )}
       <div className="stats">
         <div className="stat"><b>{active.length}</b><span>Active employees</span></div>
-        <div className="stat"><b>{(emps || []).length - active.length}</b><span>Past employees</span></div>
+        <div className="stat"><b>{(emps || []).filter((e) => e.status === "Inactive").length}</b><span>Past employees</span></div>
+        {(emps || []).some((e) => e.status === "Draft") && (
+          <div className="stat"><b>{(emps || []).filter((e) => e.status === "Draft").length}</b><span>Draft (not on payroll)</span></div>
+        )}
         {latest && <>
           <div className="stat"><b>₹{inr(totals.net)}</b><span>In-hand · {monthLabel(latest.month)}</span></div>
           <div className="stat"><b>₹{inr(totals.ctc)}</b><span>Cost to company · {monthLabel(latest.month)}</span></div>

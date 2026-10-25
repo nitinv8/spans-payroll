@@ -22,7 +22,7 @@ export default async function Payroll() {
         <div><label htmlFor="payment_date">Bank transfer date</label><input id="payment_date" name="payment_date" type="date" /></div>
         <button className="btn primary">Start payroll</button>
         <span className="muted small" style={{ flexBasis: "100%" }}>
-          Adds everyone employed that month with their applicable salary structure. Sundays are pre-filled as paid offs, and that month&apos;s OT incentives go into Incentive.
+          Adds everyone employed that month with their applicable salary structure (draft employees are never included). Sundays are pre-filled as paid offs, and that month&apos;s OT incentives go into Incentive.
         </span>
       </form>
       <div className="tablewrap">

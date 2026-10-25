@@ -3,6 +3,7 @@ import { DEFAULT_FORMULAS, calculate, validateFormulas, suggestOtIncentive } fro
 import { parse, evalNode } from "../lib/formula";
 import { EMPLOYEES, STRUCTURES, HISTORY, CTC_CHECKS } from "../data/sheet-import";
 import { toStructure } from "../data/to-structure";
+import { eligibleForMonth } from "../lib/run-logic";
 
 let fail = 0, pass = 0;
 const check = (name: string, got: number, want: number, tol = 0.5) => {
@@ -57,6 +58,14 @@ for (const bad of ["constructor", "toString", "__proto__", "valueOf(1)", "constr
 // OT suggestion matches OT log (Mohit Aug 2.5 days → 1353; Pritam Jul 3.5 → 1895)
 check("OT Mohit", suggestOtIncentive(toStructure(STRUCTURES["Emp 41"]), 31, 2.5, false, false).amount, 1353, 0);
 check("OT Pritam", suggestOtIncentive(toStructure(STRUCTURES["Emp 37"]), 31, 3.5, false, false).amount, 1895, 0);
+
+// Draft employees are never on payroll; active ones are; leavers only up to their leaving month
+const base = { id: "x", emp_code: "Emp 99", name: "T", father_name: null, designation: null, location: null, date_of_joining: "2026-01-01", date_of_leaving: null,
+  uan: null, esic_number: null, bank_account: null, ifsc: null, bank_name: null, email: null, orgzit_description: null, orgzit_id: null, include_in_bank_file: true, sort_order: 1 };
+check("draft excluded", eligibleForMonth({ ...base, status: "Draft" }, "2026-10-01") ? 1 : 0, 0, 0);
+check("active included", eligibleForMonth({ ...base, status: "Active" }, "2026-10-01") ? 1 : 0, 1, 0);
+check("leaver in leaving month", eligibleForMonth({ ...base, status: "Inactive", date_of_leaving: "2026-10-15" }, "2026-10-01") ? 1 : 0, 1, 0);
+check("leaver after leaving", eligibleForMonth({ ...base, status: "Inactive", date_of_leaving: "2026-09-15" }, "2026-10-01") ? 1 : 0, 0, 0);
 
 console.log(`\n${pass} checks passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

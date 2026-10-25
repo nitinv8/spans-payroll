@@ -25,7 +25,7 @@ export default async function RunPage({ params }: { params: { id: string } }) {
   const locked = run.status === "finalized";
 
   const present = new Set(lines.map((l) => l.employee_id));
-  const addable = sortEmployees((emps || []) as Employee[]).filter((e) => !present.has(e.id));
+  const addable = sortEmployees((emps || []) as Employee[]).filter((e) => !present.has(e.id) && e.status !== "Draft");
   const missingEligible = addable.filter((e) => eligibleForMonth(e, run.month));
   const errors = lines.filter((l) => l.error);
   const noOrgzit = lines.filter((l) => !l.snapshot.orgzit_id);

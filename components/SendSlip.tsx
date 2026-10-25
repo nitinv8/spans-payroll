@@ -7,7 +7,7 @@ import { monthLabel } from "@/lib/payroll";
 
 export type Contact = { email: string | null; mobile: string | null };
 
-const waNumber = (m: string | null) => {
+export const waNumber = (m: string | null) => {
   const d = (m || "").replace(/\D/g, "");
   if (d.length === 10) return `91${d}`;
   if (d.length === 12 && d.startsWith("91")) return d;
@@ -15,21 +15,23 @@ const waNumber = (m: string | null) => {
   return d || "";
 };
 
-export type SlipTarget = { lineId: string; name: string; month: string; netPay: number | null; contact: Contact };
+export type SlipTarget = { lineId?: string; url?: string; name: string; month: string; netPay: number | null; contact?: Contact; draft?: boolean };
 
 /** Shared logic for downloading / emailing / WhatsApp-ing one payslip. */
-export function useSlipSender({ lineId, name, month, netPay, contact }: SlipTarget) {
+export function useSlipSender({ lineId, url, name, month, netPay, draft, contact }: SlipTarget) {
   const [busy, setBusy] = useState<"" | "email" | "wa" | "download">("");
   const [note, setNote] = useState("");
   const mLabel = monthLabel(month);
   const first = name.split(" ")[0];
   const amount = netPay != null ? `Rs. ${Math.round(Number(netPay)).toLocaleString("en-IN")}` : "";
-  const subject = `Salary slip - ${mLabel} - Spans Envirotech`;
-  const text = `Dear ${first},\n\nPlease find attached your salary slip for ${mLabel}.${amount ? `\nIn-hand salary: ${amount}` : ""}\n\nRegards,\nSpans Envirotech Pvt. Ltd.`;
-  const filename = `Spans ${mLabel} Salary Slip - ${name}.pdf`;
+  const subject = draft ? `Proposed salary break-up - Spans Envirotech` : `Salary slip - ${mLabel} - Spans Envirotech`;
+  const text = draft
+    ? `Dear ${first},\n\nPlease find attached the proposed monthly salary break-up for your role at Spans Envirotech.${amount ? `\nEstimated in-hand salary: ${amount} per month` : ""}\n\nThis is a draft for discussion and is not a payslip.\n\nRegards,\nSpans Envirotech Pvt. Ltd.`
+    : `Dear ${first},\n\nPlease find attached your salary slip for ${mLabel}.${amount ? `\nIn-hand salary: ${amount}` : ""}\n\nRegards,\nSpans Envirotech Pvt. Ltd.`;
+  const filename = draft ? `Spans Draft Salary Break-up - ${name}.pdf` : `Spans ${mLabel} Salary Slip - ${name}.pdf`;
 
   async function getFile() {
-    const res = await fetch(`/api/lines/${lineId}/slip`);
+    const res = await fetch(url || `/api/lines/${lineId}/slip`);
     if (!res.ok) throw new Error(await res.text());
     const blob = await res.blob();
     return new File([blob], filename, { type: "application/pdf" });
@@ -68,11 +70,11 @@ export function useSlipSender({ lineId, name, month, netPay, contact }: SlipTarg
       }
       download(file);
       if (kind === "email") {
-        const mailto = `mailto:${encodeURIComponent(contact.email || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+        const mailto = `mailto:${encodeURIComponent(contact?.email || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
         setTimeout(() => { window.location.href = mailto; }, 600); // let the download start first
         setNote("Slip downloaded – attach it to the email that opened.");
       } else {
-        const num = waNumber(contact.mobile);
+        const num = waNumber(contact?.mobile ?? null);
         const wa = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
         const w = window.open(wa, "_blank");
         if (!w) setTimeout(() => { window.location.href = wa; }, 600); // pop-up blocked: open in this tab
@@ -91,16 +93,15 @@ export function useSlipSender({ lineId, name, month, netPay, contact }: SlipTarg
 
 export default function SendSlip({ compact = false, ...target }: SlipTarget & { compact?: boolean }) {
   const { send, busy, note } = useSlipSender(target);
-  const { contact } = target;
   return (
     <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
       <span className="row" style={{ flexWrap: "nowrap", gap: 4 }}>
         <button type="button" className="btn sm" disabled={!!busy} onClick={() => send("email")}
-          title={contact.email ? `Email to ${contact.email}` : "No email on file – you can type one in"}>
+          title="Opens your email app with the slip message">
           {busy === "email" ? "…" : compact ? "Email" : "Send by email"}
         </button>
         <button type="button" className="btn sm" disabled={!!busy} onClick={() => send("wa")}
-          title={contact.mobile ? `WhatsApp to ${contact.mobile}` : "No mobile on file – you can pick the contact"}>
+          title="Opens WhatsApp with the slip message">
           {busy === "wa" ? "…" : compact ? "WhatsApp" : "Send by WhatsApp"}
         </button>
       </span>

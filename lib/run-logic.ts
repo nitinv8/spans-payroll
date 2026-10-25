@@ -23,6 +23,7 @@ export function sortEmployees<T extends { sort_order: number; emp_code: string }
 
 /** Employees who should appear in a month's payroll. */
 export function eligibleForMonth(e: Employee, month: string) {
+  if (e.status === "Draft") return false; // offer/interview stage – never processed in payroll
   const end = monthEnd(month);
   if (e.date_of_joining && e.date_of_joining > end) return false;
   if (e.date_of_leaving) return e.date_of_leaving >= month;

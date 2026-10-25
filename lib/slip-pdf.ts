@@ -1,5 +1,5 @@
 // Salary slip PDF – same layout as the "FY2026-27-Salary Slips" tab, generated server-side with pdf-lib.
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
 import { monthLabel, type FormulaRow } from "./payroll";
 import type { LineRow } from "./exports";
 
@@ -41,8 +41,11 @@ const dmy = (iso: string | null | undefined) => {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-");
 };
 
-function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company, month: string, formulas: FormulaRow[], l: LineRow) {
+function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company, month: string, formulas: FormulaRow[], l: LineRow, draft = false) {
   const { width, height } = page.getSize();
+  if (draft) {
+    page.drawText("DRAFT", { x: 120, y: 260, size: 130, font: bold, color: rgb(0.88, 0.9, 0.93), rotate: degrees(35) });
+  }
   const M = 48;
   const ink = rgb(0.1, 0.12, 0.15), muted = rgb(0.4, 0.43, 0.48), line = rgb(0.8, 0.82, 0.85), band = rgb(0.93, 0.95, 0.97);
   let y = height - M;
@@ -55,8 +58,8 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   text(company.name, M, y, 15, bold); y -= 15;
   if (company.address) { text(company.address, M, y, 8.5, font, muted); y -= 11; }
   text([company.pan && `PAN: ${company.pan}`, company.cin && `CIN: ${company.cin}`].filter(Boolean).join("     "), M, y, 8.5, font, muted);
-  right("SALARY SLIP", width - M, height - M, 11, bold);
-  right(monthLabel(month), width - M, height - M - 14, 10);
+  right(draft ? "DRAFT SALARY BREAK-UP" : "SALARY SLIP", width - M, height - M, 11, bold);
+  right(draft ? "Proposed monthly salary" : monthLabel(month), width - M, height - M - 14, 10);
   y -= 12; hr(y); y -= 20;
 
   // Employee block
@@ -66,7 +69,8 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   ];
   const rightCol: [string, string][] = [
     ["UAN", s.uan || "Not applicable"], ["Date of Joining", dmy(s.date_of_joining)],
-    ["Bank A/c", s.bank_account ? `XXXX${s.bank_account.replace(/\s/g, "").slice(-4)}` : ""], ["Salary Month", monthLabel(month)],
+    draft ? ["Status", "Proposed (not yet joined)"] : ["Bank A/c", s.bank_account ? `XXXX${s.bank_account.replace(/\s/g, "").slice(-4)}` : ""],
+    draft ? ["Prepared on", dmy(new Date().toISOString().slice(0, 10))] : ["Salary Month", monthLabel(month)],
   ];
   for (let i = 0; i < 4; i++) {
     text(left[i][0], M, y, 8.5, font, muted); text(left[i][1], M + 105, y, 9.5, bold);
@@ -80,10 +84,12 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
     ["Total days", `${total}`], ["Days worked", `${l.working_days}`], ["Weekly & paid offs", `${l.paid_offs}`], ["Leaves", `${l.leaves}`],
   ];
   if (Number(l.lop_days) > 0) days.push(["LOP days", `${l.lop_days}`]);
-  page.drawRectangle({ x: M, y: y - 11, width: width - 2 * M, height: 28, color: band });
-  const colW = (width - 2 * M) / days.length;
-  days.forEach(([k, v], i) => { text(k, M + 8 + i * colW, y + 4, 7.5, font, muted); text(v, M + 8 + i * colW, y - 4, 9.5, bold); });
-  y -= 30;
+  if (!draft) {
+    page.drawRectangle({ x: M, y: y - 11, width: width - 2 * M, height: 28, color: band });
+    const colW = (width - 2 * M) / days.length;
+    days.forEach(([k, v], i) => { text(k, M + 8 + i * colW, y + 4, 7.5, font, muted); text(v, M + 8 + i * colW, y - 4, 9.5, bold); });
+    y -= 30;
+  }
 
   // Two columns: earnings | employer contributions
   const c = l.calc || {};
@@ -129,7 +135,7 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
 
   // Net
   page.drawRectangle({ x: M, y: y - 14, width: width - 2 * M, height: 34, color: rgb(0.11, 0.33, 0.45) });
-  text("Total In Hand Salary", M + 10, y + 2, 11, bold, rgb(1, 1, 1));
+  text(draft ? "Estimated In Hand Salary (per month)" : "Total In Hand Salary", M + 10, y + 2, 11, bold, rgb(1, 1, 1));
   const net = Number(l.net_pay) || 0;
   const netStr = `Rs. ${net.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   page.drawText(netStr, { x: width - M - 10 - bold.widthOfTextAtSize(netStr, 13), y: y + 1, size: 13, font: bold, color: rgb(1, 1, 1) });
@@ -138,10 +144,14 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
 
   // Notes
   text("Notes:", M, y, 8.5, bold, muted); y -= 12;
-  for (const n of (company.slip_notes || "").split("\n").filter(Boolean)) { text(n, M, y, 8.5, font, muted); y -= 11; }
+  const notes = draft
+    ? ["This is a draft salary break-up for discussion only. It is not a payslip or an offer of employment.",
+       "Actual monthly pay depends on attendance, statutory rates and rules in force at the time."]
+    : (company.slip_notes || "").split("\n").filter(Boolean);
+  for (const n of notes) { text(n, M, y, 8.5, font, muted); y -= 11; }
 }
 
-export async function buildSlipsPdf(company: Company, month: string, formulas: FormulaRow[], lines: LineRow[]) {
+export async function buildSlipsPdf(company: Company, month: string, formulas: FormulaRow[], lines: LineRow[], draft = false) {
   const doc = await PDFDocument.create();
   doc.setTitle(`${company.name} – Salary Slips ${monthLabel(month)}`);
   doc.setAuthor(company.name);
@@ -149,7 +159,7 @@ export async function buildSlipsPdf(company: Company, month: string, formulas: F
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   for (const l of lines) {
     const page = doc.addPage([595.28, 841.89]); // A4
-    drawSlip(page, font, bold, company, month, formulas, l);
+    drawSlip(page, font, bold, company, month, formulas, l, draft);
   }
   return doc.save();
 }

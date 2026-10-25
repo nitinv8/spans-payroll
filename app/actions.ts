@@ -50,7 +50,7 @@ export async function formulasFor(month: string): Promise<{ id: string | null; f
 const EMP_FIELDS = [
   "emp_code", "name", "father_name", "designation", "location", "status", "dob", "date_of_joining", "date_of_leaving", "mobile",
   "email", "bank_advice_email", "bank_account", "ifsc", "bank_name", "aadhaar", "pan", "uan", "esic_number", "blood_group",
-  "tshirt_size", "shoe_size", "tshirt_status", "id_card", "epf_kyc", "orgzit_description", "orgzit_id", "notes",
+  "tshirt_size", "shoe_size", "tshirt_status", "id_card", "epf_kyc", "orgzit_description", "orgzit_id", "notes", "joining_letter_url",
 ];
 
 export async function saveEmployee(form: FormData) {
@@ -65,6 +65,7 @@ export async function saveEmployee(form: FormData) {
   if (row.bank_account) row.bank_account = String(row.bank_account).replace(/\s/g, "");
   if (!row.emp_code || !row.name) fail("Employee # and name are required");
   if (row.date_of_leaving && row.status === "Active") row.status = "Inactive";
+  if (row.joining_letter_url && !/^https?:\/\//i.test(String(row.joining_letter_url))) fail("Joining letter link should start with https://");
   const res = id ? await sb.from("employees").update(row).eq("id", id).select("id").single()
     : await sb.from("employees").insert(row).select("id").single();
   if (res.error) fail(res.error.message);
@@ -256,6 +257,7 @@ export async function addEmployeeToRun(form: FormData) {
   const runId = String(form.get("run_id")), employeeId = String(form.get("employee_id"));
   const run = await loadRun(sb, runId);
   const { data: e } = await sb.from("employees").select("*").eq("id", employeeId).single();
+  if (e?.status === "Draft") fail("Draft employees can't be added to payroll. Change their status to Active first.");
   const { data: structs } = await sb.from("salary_structures").select("*").eq("employee_id", employeeId);
   const { count } = await sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("run_id", runId);
   const s = structureForMonth((structs || []) as Structure[], run.month);

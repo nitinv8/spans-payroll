@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import EmployeeForm from "@/components/EmployeeForm";
 import ConfirmButton from "@/components/Confirm";
-import SendSlip from "@/components/SendSlip";
+import SendSlip, { waNumber } from "@/components/SendSlip";
 import { pageDb, fmtDate } from "@/lib/data";
-import { inr, monthLabel } from "@/lib/payroll";
+import { inr, monthLabel, monthEnd, DEFAULT_FORMULAS, type FormulaRow } from "@/lib/payroll";
+import { computeLine, snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
 import { saveStructure, deleteStructure, deleteEmployee } from "@/app/actions";
 
 const COMPONENTS = [
@@ -30,6 +31,15 @@ export default async function EmployeePage({ params, searchParams }: { params: {
   const sortedLines = (lines || []).sort((a: any, b: any) => (a.payroll_runs.month < b.payroll_runs.month ? 1 : -1));
   const { count: paidMonths } = await sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("employee_id", e.id);
   const latest = structs?.[0];
+  // Estimated in-hand for the draft message (same calculation as the draft slip)
+  let draftNet: number | null = null;
+  if (e.status === "Draft" && latest) {
+    const m = new Date().toISOString().slice(0, 7) + "-01";
+    const { data: sets } = await sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(m)).order("effective_from", { ascending: false }).limit(1);
+    const r = computeLine((sets?.[0]?.formulas as FormulaRow[]) || DEFAULT_FORMULAS, m, snapshotOf(e as Employee), structureValues(latest as Structure),
+      { working_days: 30, paid_offs: 0, leaves: 0, lop_days: 0, incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 });
+    draftNet = r.net_pay;
+  }
   const base = searchParams.from ? structs?.find((s) => s.id === searchParams.from) : latest;
   const gross = (s: any) => COMPONENTS.reduce((a, [k]) => a + Number(s[k] || 0), 0);
   const nextMonth = (() => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + 1, 1); return d.toISOString().slice(0, 10); })();
@@ -39,11 +49,39 @@ export default async function EmployeePage({ params, searchParams }: { params: {
       <div className="pagehead">
         <div>
           <h1>{e.name}</h1>
-          <div className="muted">{e.emp_code} · {e.designation} · {e.location} · <span className={`badge ${e.status === "Active" ? "ok" : ""}`}>{e.status === "Active" ? "Active" : "Past employee"}</span></div>
+          <div className="muted">{e.emp_code} · {e.designation} · {e.location} ·{" "}
+            <span className={`badge ${e.status === "Active" ? "ok" : e.status === "Draft" ? "warn" : ""}`}>{e.status === "Inactive" ? "Past employee" : e.status}</span></div>
+          <div className="row" style={{ marginTop: 8, gap: 14 }}>
+            {e.mobile && waNumber(e.mobile) && (
+              <a href={`https://wa.me/${waNumber(e.mobile)}`} target="_blank" rel="noopener noreferrer" title="Open WhatsApp chat">WhatsApp {e.mobile} ↗</a>
+            )}
+            {e.email && <a href={`mailto:${e.email}`}>{e.email}</a>}
+            {e.joining_letter_url
+              ? <a href={e.joining_letter_url} target="_blank" rel="noopener noreferrer">Joining letter ↗</a>
+              : <span className="muted small">No joining letter linked</span>}
+          </div>
         </div>
         <Link className="btn" href="/employees">All employees</Link>
       </div>
       {e.notes && <div className="notice warn">{e.notes}</div>}
+      {e.status === "Draft" && (
+        <div className="panel" style={{ borderColor: "#f1d9a5", background: "#fffbf2" }}>
+          <h2 style={{ marginBottom: 6 }}>Draft employee: not included in payroll</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Use this to share a proposed salary break-up with a candidate or new joiner. When they join, set <b>Employment status</b> to Active and fill in the date of joining.
+          </p>
+          {latest ? (
+            <div className="row">
+              <a className="btn primary" href={`/api/employees/${e.id}/draft-slip`}>Download draft salary slip</a>
+              {draftNet != null && <span className="muted">Estimated in-hand: <b>₹{inr(draftNet)}</b>/month</span>}
+              <SendSlip url={`/api/employees/${e.id}/draft-slip`} draft name={e.name} month={new Date().toISOString().slice(0, 7) + "-01"}
+                netPay={draftNet} contact={{ email: e.email, mobile: e.mobile }} />
+            </div>
+          ) : (
+            <p style={{ margin: 0 }}><Link href="?tab=salary">Add a salary structure</Link> first to generate the draft slip.</p>
+          )}
+        </div>
+      )}
       <div className="tabs">
         <Link href={`?tab=details`} className={tab === "details" ? "active" : ""}>Details</Link>
         <Link href={`?tab=salary`} className={tab === "salary" ? "active" : ""}>Salary history ({structs?.length || 0})</Link>

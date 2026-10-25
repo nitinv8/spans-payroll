@@ -9,7 +9,7 @@ Password-protected payroll and employee database for Spans Envirotech. It replac
 
 | Area | What you get |
 |---|---|
-| Employees | Current and past employees with every Master Employee Database field: KYC, bank, UAN/ESIC, sizes and Orgzit vendor IDs |
+| Employees | Current, past and **draft** employees (offer/interview stage: never on payroll; download or send a watermarked draft salary break-up). Joining-letter link, one-tap WhatsApp chat. Every Master Employee Database field: KYC, bank, UAN/ESIC, sizes and Orgzit vendor IDs |
 | Salary history | Each revision has an "effective from" date. A month always uses the revision that applied then, and old payslips never change |
 | Monthly payroll | Pick a month. Everyone employed that month is added with their structure. Sundays are pre-filled as offs, OT incentives go into Incentive, and joining/leaving months get LOP days pre-filled. Edit the days and amounts in a grid, then **Finalize** to lock the month (the database refuses edits) |
 | Outputs | **Salary slip PDFs** (one PDF or a ZIP of individual files), the **HDFC ENET CSV** (same format as your bank upload), the **Orgzit upload CSV**, a salary register CSV, and a PF/ESI/LWF summary by state |

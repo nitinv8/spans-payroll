@@ -24,7 +24,7 @@ export default function EmployeeForm({ e = {}, locations = [] }: { e?: E; locati
           <div>
             <label htmlFor="status">Employment status</label>
             <select id="status" name="status" defaultValue={e.status || "Active"}>
-              <option>Active</option><option>Inactive</option>
+              <option value="Active">Active</option><option value="Draft">Draft (offer / interview – not paid)</option><option value="Inactive">Inactive (left)</option>
             </select>
           </div>
           <F name="dob" label="Date of birth" e={e} type="date" />
@@ -33,6 +33,10 @@ export default function EmployeeForm({ e = {}, locations = [] }: { e?: E; locati
           <F name="mobile" label="Mobile" e={e} />
           <F name="email" label="Email" e={e} type="email" />
           <F name="sort_order" label="Order on payroll (lower = first)" e={e} type="number" />
+          <div className="wide">
+            <label htmlFor="joining_letter_url">Joining letter (Google Drive link)</label>
+            <input id="joining_letter_url" name="joining_letter_url" type="url" placeholder="https://drive.google.com/…" defaultValue={e.joining_letter_url ?? ""} />
+          </div>
         </div>
       </div>
       <div className="panel">

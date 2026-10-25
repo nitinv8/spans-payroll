@@ -41,7 +41,6 @@ export default function RowMenu({ target, detailsOpen, onToggleDetails, onNote, 
   }, [open]);
 
   const act = (fn: () => void) => () => { setOpen(false); fn(); };
-  const c = target.contact;
 
   return (
     <div className="rowmenu" ref={ref}>
@@ -54,10 +53,10 @@ export default function RowMenu({ target, detailsOpen, onToggleDetails, onNote, 
           <button role="menuitem" type="button" onClick={act(onToggleDetails)}>{detailsOpen ? "Hide details" : "View details"}</button>
           <button role="menuitem" type="button" disabled={disabled} onClick={act(downloadOnly)}>Download slip (PDF)</button>
           <button role="menuitem" type="button" disabled={disabled} onClick={act(() => send("email"))}>
-            Send by email{c.email ? <span className="rowmenu-hint">{c.email}</span> : <span className="rowmenu-hint">no email on file</span>}
+            Send by email
           </button>
           <button role="menuitem" type="button" disabled={disabled} onClick={act(() => send("wa"))}>
-            Send by WhatsApp{c.mobile ? <span className="rowmenu-hint">{c.mobile}</span> : <span className="rowmenu-hint">no mobile on file</span>}
+            Send by WhatsApp
           </button>
         </div>
       )}
