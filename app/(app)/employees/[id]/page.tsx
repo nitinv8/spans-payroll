@@ -20,23 +20,26 @@ const FLAGS = [
 
 export default async function EmployeePage({ params, searchParams }: { params: { id: string }; searchParams: { tab?: string; from?: string } }) {
   const { sb } = await pageDb();
-  const { data: e } = await sb.from("employees").select("*").eq("id", params.id).single();
-  if (!e) notFound();
   const tab = searchParams.tab || "details";
-  const { data: structs } = await sb.from("salary_structures").select("*").eq("employee_id", e.id).order("effective_from", { ascending: false });
-  const { data: all } = await sb.from("employees").select("location");
+  // Everything this page needs, fetched in parallel
+  const [{ data: e }, { data: structs }, { data: all }, { data: lines }, { count: paidMonths }, { data: sets }] = await Promise.all([
+    sb.from("employees").select("*").eq("id", params.id).single(),
+    sb.from("salary_structures").select("*").eq("employee_id", params.id).order("effective_from", { ascending: false }),
+    sb.from("employees").select("location"),
+    tab === "payslips"
+      ? sb.from("payroll_lines").select("id, run_id, gross, net_pay, ctc, incentive, manual_adjustment, working_days, paid_offs, leaves, lop_days, payroll_runs(month, status)").eq("employee_id", params.id)
+      : Promise.resolve({ data: null }),
+    sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("employee_id", params.id),
+    sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(new Date().toISOString().slice(0, 7) + "-01")).order("effective_from", { ascending: false }).limit(1),
+  ]);
+  if (!e) notFound();
   const locations = Array.from(new Set((all || []).map((x) => x.location).filter(Boolean))) as string[];
-  const { data: lines } = tab === "payslips"
-    ? await sb.from("payroll_lines").select("id, run_id, gross, net_pay, ctc, incentive, manual_adjustment, working_days, paid_offs, leaves, lop_days, payroll_runs(month, status)").eq("employee_id", e.id)
-    : { data: null };
-  const sortedLines = (lines || []).sort((a: any, b: any) => (a.payroll_runs.month < b.payroll_runs.month ? 1 : -1));
-  const { count: paidMonths } = await sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("employee_id", e.id);
+  const sortedLines = ((lines || []) as any[]).sort((a, b) => (a.payroll_runs.month < b.payroll_runs.month ? 1 : -1));
   const latest = structs?.[0];
   // Estimated in-hand for the draft message (same calculation as the draft slip)
   let draftNet: number | null = null;
   if (e.status === "Draft" && latest) {
     const m = new Date().toISOString().slice(0, 7) + "-01";
-    const { data: sets } = await sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(m)).order("effective_from", { ascending: false }).limit(1);
     const r = computeLine((sets?.[0]?.formulas as FormulaRow[]) || DEFAULT_FORMULAS, m, snapshotOf(e as Employee), structureValues(latest as Structure),
       { working_days: 30, paid_offs: 0, leaves: 0, lop_days: 0, incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 });
     draftNet = r.net_pay;

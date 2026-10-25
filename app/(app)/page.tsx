@@ -4,20 +4,20 @@ import { inr, monthLabel } from "@/lib/payroll";
 
 export default async function Dashboard() {
   const { sb } = await pageDb();
-  const [{ data: emps }, { data: runs }] = await Promise.all([
+  const [{ data: emps }, { data: runs }, { data: noStruct }] = await Promise.all([
     sb.from("employees").select("id, status, location, name, date_of_joining, date_of_leaving"),
     sb.from("payroll_runs").select("id, month, status, payment_date").order("month", { ascending: false }).limit(12),
+    sb.from("employees").select("id, name, salary_structures(id)").eq("status", "Active"),
   ]);
   const active = (emps || []).filter((e) => e.status === "Active");
   const latest = runs?.[0];
-  let totals = { net: 0, gross: 0, ctc: 0, n: 0 };
+  const totals = { net: 0, gross: 0, ctc: 0, n: 0 };
   if (latest) {
     const { data: lines } = await sb.from("payroll_lines").select("net_pay, gross, ctc").eq("run_id", latest.id);
     for (const l of lines || []) { totals.net += Number(l.net_pay) || 0; totals.gross += Number(l.gross) || 0; totals.ctc += Number(l.ctc) || 0; totals.n++; }
   }
   const byLoc: Record<string, number> = {};
   for (const e of active) byLoc[e.location || "—"] = (byLoc[e.location || "—"] || 0) + 1;
-  const { data: noStruct } = await sb.from("employees").select("id, name, salary_structures(id)").eq("status", "Active");
   const missing = (noStruct || []).filter((e: { salary_structures: unknown[] }) => !e.salary_structures?.length);
 
   return (

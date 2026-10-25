@@ -8,8 +8,10 @@ export default async function Employees({ searchParams }: { searchParams: { stat
   const { sb } = await pageDb();
   const status = searchParams.status || "Active";
   const q = (searchParams.q || "").toLowerCase();
-  const { data: emps } = await sb.from("employees").select("*");
-  const { data: structs } = await sb.from("salary_structures").select("*");
+  const [{ data: emps }, { data: structs }] = await Promise.all([
+    sb.from("employees").select("*"),
+    sb.from("salary_structures").select("*"),
+  ]);
   const today = new Date().toISOString().slice(0, 7) + "-01";
   const counts: Record<string, number> = { All: (emps || []).length };
   for (const e of emps || []) counts[e.status] = (counts[e.status] || 0) + 1;

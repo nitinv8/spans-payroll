@@ -5,8 +5,10 @@ import PasswordForm from "@/components/PasswordForm";
 
 export default async function Settings() {
   const { sb, user } = await pageDb();
-  const { data: c } = await sb.from("company_settings").select("*").eq("id", 1).single();
-  const { data: users } = await sb.from("app_users").select("*").order("email");
+  const [{ data: c }, { data: users }] = await Promise.all([
+    sb.from("company_settings").select("*").eq("id", 1).single(),
+    sb.from("app_users").select("*").order("email"),
+  ]);
   const o = (c?.orgzit || {}) as Record<string, any>;
   const F = ({ n, l, v }: { n: string; l: string; v: string }) => (
     <div><label htmlFor={n}>{l}</label><input id={n} name={n} defaultValue={v || ""} /></div>

@@ -7,9 +7,11 @@ import OtForm from "./OtForm";
 export default async function Incentives({ searchParams }: { searchParams: { month?: string } }) {
   const { sb } = await pageDb();
   const month = searchParams.month || new Date().toISOString().slice(0, 7);
-  const { data: rows } = await sb.from("ot_incentives").select("*, employees(name)").order("month", { ascending: false }).order("created_at");
-  const { data: emps } = await sb.from("employees").select("*").eq("status", "Active");
-  const { data: structs } = await sb.from("salary_structures").select("*");
+  const [{ data: rows }, { data: emps }, { data: structs }] = await Promise.all([
+    sb.from("ot_incentives").select("*, employees(name)").order("month", { ascending: false }).order("created_at"),
+    sb.from("employees").select("*").eq("status", "Active"),
+    sb.from("salary_structures").select("*"),
+  ]);
   const employees = sortEmployees(emps || []).map((e) => {
     const s = structureForMonth((structs || []).filter((x: Structure) => x.employee_id === e.id), `${month}-01`) as Structure | undefined;
     return { id: e.id, name: e.name, location: e.location, s: s ? { basic: +s.basic, hra: +s.hra, medical: +s.medical, mobile: +s.mobile, site_allowance: +s.site_allowance, supervisor_allowance: +s.supervisor_allowance } : null };

@@ -12,13 +12,16 @@ import {
 
 export default async function RunPage({ params }: { params: { id: string } }) {
   const { sb } = await pageDb();
-  const { data: run } = await sb.from("payroll_runs").select("*").eq("id", params.id).single();
+  // All four lookups in parallel (one round trip instead of four)
+  const [{ data: run }, { data: rawLines }, { data: emps }, { data: settings }] = await Promise.all([
+    sb.from("payroll_runs").select("*").eq("id", params.id).single(),
+    sb.from("payroll_lines").select("*").eq("run_id", params.id),
+    sb.from("employees").select("*"),
+    sb.from("company_settings").select("orgzit").eq("id", 1).single(),
+  ]);
   if (!run) notFound();
-  const { data: rawLines } = await sb.from("payroll_lines").select("*").eq("run_id", run.id);
   const lines = ((rawLines || []) as (LineRow & { employee_id: string })[]).sort(
     (a, b) => Number(a.print_code?.slice(1)) - Number(b.print_code?.slice(1)));
-  const { data: emps } = await sb.from("employees").select("*");
-  const { data: settings } = await sb.from("company_settings").select("orgzit").eq("id", 1).single();
   const formulas = run.formulas as FormulaRow[];
   // Current contact details (personal email/mobile), used by the send-payslip buttons
   const contacts = Object.fromEntries((emps || []).map((e) => [e.id, { email: e.email as string | null, mobile: e.mobile as string | null }]));

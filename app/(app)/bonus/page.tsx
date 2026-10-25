@@ -6,12 +6,13 @@ import { saveBonus, deleteBonus } from "@/app/actions";
 export default async function Bonus() {
   const { sb } = await pageDb();
   const fy = financialYear(new Date().toISOString().slice(0, 10));
-  const { data: rows } = await sb.from("bonus_payments").select("*, employees(name, location)").order("created_at", { ascending: false });
-  const { data: emps } = await sb.from("employees").select("id, name, emp_code, sort_order, status");
   // Accrued annual bonus from payroll (formula "bonus") for the FY, per employee
   const fyStart = `${fy.slice(2, 6)}-04-01`, fyEnd = `${Number(fy.slice(2, 6)) + 1}-03-31`;
-  const { data: lines } = await sb.from("payroll_lines").select("employee_id, calc, payroll_runs!inner(month)")
-    .gte("payroll_runs.month", fyStart).lte("payroll_runs.month", fyEnd);
+  const [{ data: rows }, { data: emps }, { data: lines }] = await Promise.all([
+    sb.from("bonus_payments").select("*, employees(name, location)").order("created_at", { ascending: false }),
+    sb.from("employees").select("id, name, emp_code, sort_order, status"),
+    sb.from("payroll_lines").select("employee_id, calc, payroll_runs!inner(month)").gte("payroll_runs.month", fyStart).lte("payroll_runs.month", fyEnd),
+  ]);
   const accrued: Record<string, number> = {};
   for (const l of lines || []) accrued[l.employee_id] = (accrued[l.employee_id] || 0) + (Number((l.calc as any)?.bonus) || 0);
   const paid: Record<string, number> = {};

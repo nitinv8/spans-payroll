@@ -5,8 +5,10 @@ import { createRun } from "@/app/actions";
 
 export default async function Payroll() {
   const { sb } = await pageDb();
-  const { data: runs } = await sb.from("payroll_runs").select("id, month, status, payment_date, finalized_by").order("month", { ascending: false });
-  const { data: lines } = await sb.from("payroll_lines").select("run_id, net_pay, gross, ctc");
+  const [{ data: runs }, { data: lines }] = await Promise.all([
+    sb.from("payroll_runs").select("id, month, status, payment_date, finalized_by").order("month", { ascending: false }),
+    sb.from("payroll_lines").select("run_id, net_pay, gross, ctc"),
+  ]);
   const t: Record<string, { n: number; net: number; gross: number; ctc: number }> = {};
   for (const l of lines || []) {
     const x = (t[l.run_id] ||= { n: 0, net: 0, gross: 0, ctc: 0 });

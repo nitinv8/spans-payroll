@@ -1,15 +1,13 @@
 import { Suspense } from "react";
 import Nav from "@/components/Nav";
 import Flash from "@/components/Flash";
-import { pageDb } from "@/lib/data";
+import { pageDb, isAllowed } from "@/lib/data";
 import { signOut } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { sb, user } = await pageDb();
-  const { data: allowed } = await sb.from("app_users").select("email").limit(1);
-  const ok = !!allowed?.length;
+  const [{ user }, ok] = await Promise.all([pageDb(), isAllowed()]);
   return (
     <div className="shell">
       <aside className="side">
