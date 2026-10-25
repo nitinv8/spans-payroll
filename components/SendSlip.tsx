@@ -43,11 +43,18 @@ export default function SendSlip({ lineId, name, month, netPay, contact, compact
 
   async function send(kind: "email" | "wa") {
     setBusy(kind); setNote("");
+    // WhatsApp drops the message text when a file is shared to it, so copy the message first
+    // (must happen right at the tap, before any await, or the browser blocks clipboard access).
+    let copied = false;
+    if (kind === "wa") {
+      try { await navigator.clipboard.writeText(text); copied = true; } catch { copied = false; }
+    }
     try {
       const file = await getFile();
       const touch = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
       const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       if (touch && nav.canShare?.({ files: [file] })) {
+        if (kind === "wa" && copied) setNote("Message copied. In WhatsApp, long-press the caption box → Paste, then send.");
         await navigator.share({ files: [file], title: subject, text });
         return;
       }
@@ -61,7 +68,8 @@ export default function SendSlip({ lineId, name, month, netPay, contact, compact
         const wa = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
         const w = window.open(wa, "_blank");
         if (!w) setTimeout(() => { window.location.href = wa; }, 600); // pop-up blocked: open in this tab
-        setNote(num ? "Slip downloaded – drag it into the WhatsApp chat." : "No mobile number on file – pick the contact in WhatsApp, then attach the downloaded slip.");
+        setNote((num ? "Slip downloaded – drag it into the WhatsApp chat." : "No mobile number on file – pick the contact in WhatsApp, then attach the downloaded slip.")
+          + (copied ? " If the message isn't there, paste it (Ctrl/Cmd+V) – it's copied." : ""));
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError") setNote(`Couldn't prepare the slip: ${(e as Error).message}`);
