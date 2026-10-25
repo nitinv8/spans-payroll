@@ -4,16 +4,10 @@
 //  • Otherwise → download the PDF, then open the email app / WhatsApp with the recipient and message pre-filled.
 import { useState } from "react";
 import { monthLabel } from "@/lib/payroll";
+import { waNumber } from "@/lib/contact";
 
 export type Contact = { email: string | null; mobile: string | null };
 
-export const waNumber = (m: string | null) => {
-  const d = (m || "").replace(/\D/g, "");
-  if (d.length === 10) return `91${d}`;
-  if (d.length === 12 && d.startsWith("91")) return d;
-  if (d.length === 11 && d.startsWith("0")) return `91${d.slice(1)}`;
-  return d || "";
-};
 
 export type SlipTarget = { lineId?: string; url?: string; name: string; month: string; netPay: number | null; contact?: Contact; draft?: boolean };
 

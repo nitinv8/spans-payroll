@@ -2,7 +2,7 @@ import Link from "next/link";
 import { pageDb, fmtDate } from "@/lib/data";
 import { inr } from "@/lib/payroll";
 import { sortEmployees, structureForMonth, type Structure } from "@/lib/run-logic";
-import { waNumber } from "@/components/SendSlip";
+import { waNumber } from "@/lib/contact";
 
 export default async function Employees({ searchParams }: { searchParams: { status?: string; q?: string } }) {
   const { sb } = await pageDb();
