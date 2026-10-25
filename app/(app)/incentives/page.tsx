@@ -1,12 +1,13 @@
 import { pageDb } from "@/lib/data";
-import { inr, monthLabel } from "@/lib/payroll";
+import { inr, monthLabel, thisMonthIST } from "@/lib/payroll";
 import { sortEmployees, structureForMonth, type Structure } from "@/lib/run-logic";
 import { saveOt, deleteOt } from "@/app/actions";
 import OtForm from "./OtForm";
+import ConfirmButton from "@/components/Confirm";
 
 export default async function Incentives({ searchParams }: { searchParams: { month?: string } }) {
   const { sb } = await pageDb();
-  const month = searchParams.month || new Date().toISOString().slice(0, 7);
+  const month = searchParams.month || thisMonthIST().slice(0, 7);
   const [{ data: rows }, { data: emps }, { data: structs }] = await Promise.all([
     sb.from("ot_incentives").select("*, employees(name)").order("month", { ascending: false }).order("created_at"),
     sb.from("employees").select("*").eq("status", "Active"),
@@ -33,7 +34,7 @@ export default async function Incentives({ searchParams }: { searchParams: { mon
                   <td>{r.employees?.name}</td><td>{r.site}</td><td className="num">{r.days}</td>
                   <td className="num">{r.amount == null ? <span className="badge warn">no amount</span> : inr(r.amount)}</td>
                   <td className="small">{r.remarks}</td>
-                  <td><form action={deleteOt}><input type="hidden" name="id" value={r.id} /><input type="hidden" name="month" value={m.slice(0, 7)} /><button className="btn sm danger">Delete</button></form></td>
+                  <td><form action={deleteOt}><input type="hidden" name="id" value={r.id} /><input type="hidden" name="month" value={m.slice(0, 7)} /><ConfirmButton className="btn sm danger" message="Delete this OT / incentive entry?">Delete</ConfirmButton></form></td>
                 </tr>
               ))}
             </tbody>

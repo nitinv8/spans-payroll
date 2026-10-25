@@ -1,4 +1,4 @@
-import { financialYear, monthLabel, type FormulaRow } from "./payroll";
+import { financialYear, monthLabel, todayIST, type FormulaRow } from "./payroll";
 import type { Snapshot } from "./run-logic";
 
 export type RunRow = { id: string; month: string; status: string; payment_date: string | null; formulas: FormulaRow[] };
@@ -6,6 +6,7 @@ export type LineRow = {
   id: string; print_code: string | null; snapshot: Snapshot; calc: Record<string, number>;
   working_days: number; paid_offs: number; leaves: number; lop_days: number; incentive: number; arrears: number;
   ex_gratia: number; manual_adjustment: number; professional_tax: number;
+  advance_recovery?: number; other_deduction?: number; updated_at?: string;
   net_pay: number | null; gross: number | null; ctc: number | null; error: string | null; remarks?: string | null;
 };
 export type OrgzitSettings = {
@@ -36,7 +37,7 @@ export const HDFC_HEADER = [
 ];
 
 export function hdfcCsv(run: RunRow, lines: LineRow[]) {
-  const date = ddmmyyyy(run.payment_date || new Date().toISOString().slice(0, 10));
+  const date = ddmmyyyy(run.payment_date || todayIST());
   const ref = `Salary${monthTag(run.month)}`.slice(0, 20);
   const skipped: string[] = [];
   const rows: unknown[][] = [HDFC_HEADER];

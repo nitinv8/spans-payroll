@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { pageDb, fmtDate } from "@/lib/data";
-import { inr, monthLabel } from "@/lib/payroll";
+import { inr, monthLabel, thisMonthIST } from "@/lib/payroll";
 import { createRun } from "@/app/actions";
 
 export default async function Payroll() {
@@ -15,7 +15,7 @@ export default async function Payroll() {
     x.n++; x.net += Number(l.net_pay) || 0; x.gross += Number(l.gross) || 0; x.ctc += Number(l.ctc) || 0;
   }
   const latest = runs?.[0]?.month;
-  const next = latest ? new Date(Date.UTC(+latest.slice(0, 4), +latest.slice(5, 7), 1)).toISOString().slice(0, 7) : new Date().toISOString().slice(0, 7);
+  const next = latest ? new Date(Date.UTC(+latest.slice(0, 4), +latest.slice(5, 7), 1)).toISOString().slice(0, 7) : thisMonthIST().slice(0, 7);
   return (
     <>
       <div className="pagehead"><div><h1>Monthly payroll</h1><div className="muted">One payroll per month. Finalize to lock it.</div></div></div>

@@ -1,11 +1,12 @@
 import { pageDb, fmtDate } from "@/lib/data";
-import { inr, financialYear } from "@/lib/payroll";
+import { inr, financialYear, todayIST } from "@/lib/payroll";
 import { sortEmployees } from "@/lib/run-logic";
 import { saveBonus, deleteBonus } from "@/app/actions";
+import ConfirmButton from "@/components/Confirm";
 
 export default async function Bonus() {
   const { sb } = await pageDb();
-  const fy = financialYear(new Date().toISOString().slice(0, 10));
+  const fy = financialYear(todayIST());
   // Accrued annual bonus from payroll (formula "bonus") for the FY, per employee
   const fyStart = `${fy.slice(2, 6)}-04-01`, fyEnd = `${Number(fy.slice(2, 6)) + 1}-03-31`;
   const [{ data: rows }, { data: emps }, { data: lines }] = await Promise.all([
@@ -57,7 +58,7 @@ export default async function Bonus() {
             {(rows || []).map((r) => (
               <tr key={r.id}><td>{r.fy}</td><td>{r.period}</td><td>{r.employees?.name}</td><td>{r.employees?.location}</td>
                 <td className="num">{inr(r.amount)}</td><td>{fmtDate(r.transferred_on)}</td><td className="small">{r.remarks}</td>
-                <td><form action={deleteBonus}><input type="hidden" name="id" value={r.id} /><button className="btn sm danger">Delete</button></form></td></tr>
+                <td><form action={deleteBonus}><input type="hidden" name="id" value={r.id} /><ConfirmButton className="btn sm danger" message="Delete this bonus payment record?">Delete</ConfirmButton></form></td></tr>
             ))}
             {!rows?.length && <tr><td colSpan={8} className="muted">No bonus payments recorded.</td></tr>}
           </tbody>

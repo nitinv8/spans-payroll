@@ -1,18 +1,24 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { saveLine } from "@/app/actions";
-import { inr, CATEGORY_LABEL, type FormulaRow, type Category } from "@/lib/payroll";
+import { inr, daysInMonth, CATEGORY_LABEL, type FormulaRow, type Category } from "@/lib/payroll";
 import type { LineRow } from "@/lib/exports";
 import type { Contact } from "@/components/SendSlip";
 import RowMenu from "@/components/RowMenu";
 
-const INPUTS = [
-  ["working_days", "Worked", false], ["paid_offs", "Offs", false], ["leaves", "Leaves", false], ["lop_days", "LOP", false],
-  ["incentive", "Incentive", true], ["arrears", "Arrears", true], ["ex_gratia", "Ex-gratia", true],
-  ["manual_adjustment", "Adjust ±", true], ["professional_tax", "PT", true],
+// [key, column label, money?, human label, needs formula input name (column hidden if this month's formulas don't use it)]
+const ALL_INPUTS = [
+  ["working_days", "Worked", false, "Days worked", ""], ["paid_offs", "Offs", false, "Weekly and paid offs", ""],
+  ["leaves", "Paid leave", false, "Paid leave days", ""], ["lop_days", "LOP", false, "Unpaid leave (loss of pay) days", ""],
+  ["incentive", "Incentive / OT", true, "Incentive or OT amount", ""], ["arrears", "Arrears", true, "Arrears", ""],
+  ["ex_gratia", "Ex-gratia", true, "Ex-gratia", ""],
+  ["advance_recovery", "Advance rec.", true, "Advance or loan recovery", "advance_recovery"],
+  ["other_deduction", "Other ded.", true, "Other deduction (give reason in remarks)", "other_deduction"],
+  ["manual_adjustment", "Other add. ±", true, "Other addition after statutory deductions (give reason in remarks)", ""],
+  ["professional_tax", "PT (manual)", true, "Professional tax entered manually, on top of automatic PT", ""],
 ] as const;
-type InputKey = (typeof INPUTS)[number][0];
+type InputKey = (typeof ALL_INPUTS)[number][0];
 
 export default function LinesEditor({ lines: initial, formulas, locked, month, runId, removeAction, contacts }: {
   lines: LineRow[]; formulas: FormulaRow[]; locked: boolean; month: string; runId: string; removeAction: (f: FormData) => Promise<void>;
@@ -20,6 +26,28 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
 }) {
   const [lines, setLines] = useState(initial);
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
+  const dim = daysInMonth(month);
+  // Only show input columns this month's formulas actually use
+  const INPUTS = useMemo(() => {
+    const used = formulas.map((f) => f.expr).join(" ");
+    return ALL_INPUTS.filter(([, , , , need]) => !need || new RegExp(`\\b${need}\\b`).test(used));
+  }, [formulas]);
+  // When the server sends fresh rows (after a save or recalculation), keep any row still being edited
+  useEffect(() => {
+    setLines((cur) => initial.map((srv) => {
+      const mine = cur.find((c) => c.id === srv.id);
+      return mine && dirty[srv.id] ? mine : srv;
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
+  // Warn before leaving the page with unsaved edits
+  useEffect(() => {
+    const anyDirty = Object.values(dirty).some(Boolean);
+    if (!anyDirty) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
   const [status, setStatus] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [, start] = useTransition();
@@ -37,6 +65,7 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
       const res = await saveLine(id, {
         working_days: +l.working_days, paid_offs: +l.paid_offs, leaves: +l.leaves, lop_days: +l.lop_days, incentive: +l.incentive,
         arrears: +l.arrears, ex_gratia: +l.ex_gratia, manual_adjustment: +l.manual_adjustment, professional_tax: +l.professional_tax,
+        advance_recovery: +(l.advance_recovery ?? 0), other_deduction: +(l.other_deduction ?? 0),
         remarks: l.remarks ?? null,
       });
       if ("error" in res && res.error) { setStatus((s) => ({ ...s, [id]: res.error! })); return; }
@@ -57,13 +86,15 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
         <thead>
           <tr>
             <th aria-label="Actions" style={{ width: 36 }}></th><th>#</th><th>Employee</th>
-            {INPUTS.map(([k, l]) => <th key={k} className="num">{l}</th>)}
+            {INPUTS.map(([k, l, , full]) => <th key={k} className="num" title={full}>{l}</th>)}
             <th className="num">Gross</th><th className="num">Deductions</th><th className="num">In hand</th><th className="num">CTC</th>
           </tr>
         </thead>
         <tbody>
           {lines.map((l) => {
-            const total = Number(l.working_days) + Number(l.paid_offs) + Number(l.leaves);
+            const total = Number(l.working_days) + Number(l.paid_offs) + Number(l.leaves) + Number(l.lop_days);
+            const daysOff = total !== dim && total !== 0; // worked + offs + leave + LOP should equal calendar days
+            const needsReason = !l.remarks && (Number(l.other_deduction ?? 0) !== 0 || Number(l.manual_adjustment) !== 0);
             return (
               <Fragment key={l.id}>
                 <tr onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) save(l.id); }}>
@@ -77,15 +108,19 @@ export default function LinesEditor({ lines: initial, formulas, locked, month, r
                   <td>
                     <button type="button" className="namelink" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)}
                       title={open === l.id ? "Hide details" : "Show details"}>{l.snapshot.name}</button>
-                    <div className="muted small">{l.snapshot.designation} · {l.snapshot.location} · {total} days</div>
+                    <div className="muted small">{l.snapshot.designation} · {l.snapshot.location} ·{" "}
+                      {daysOff ? <span className="badge warn" title={`Worked + offs + leave + LOP should add up to ${dim}`}>{total} of {dim} days</span> : `${total} days`}</div>
+                    {needsReason && <div className="small" style={{ color: "var(--warn)" }}>Add a reason in remarks (View details) for the deduction/addition.</div>}
                     {l.error && <div className="small" style={{ color: "var(--bad)" }}>{l.error}</div>}
                     {status[l.id] && <div className="small muted">{status[l.id]}</div>}
                   </td>
-                  {INPUTS.map(([k, , money]) => (
+                  {INPUTS.map(([k, , money, full]) => (
                     <td key={k} className="num">
                       {locked ? inr(Number(l[k])) || "-" : (
                         <input className={`grid-input${money ? " wide" : ""}`} type="number" step={money ? "1" : "0.5"} value={String(l[k] ?? 0)}
-                          onChange={(e) => set(l.id, k, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(l.id); }} aria-label={`${k} for ${l.snapshot.name}`} />
+                          min={k === "manual_adjustment" ? undefined : 0} max={money ? undefined : dim}
+                          onChange={(e) => set(l.id, k, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(l.id); }}
+                          aria-label={`${full} for ${l.snapshot.name}`} title={full} />
                       )}
                     </td>
                   ))}

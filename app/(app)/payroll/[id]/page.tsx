@@ -53,8 +53,8 @@ export default async function RunPage({ params }: { params: { id: string } }) {
           <h1>{monthLabel(run.month)} payroll</h1>
           <div className="muted">
             <span className={`badge ${locked ? "ok" : "warn"}`}>{run.status}</span>{" "}
-            {locked && run.finalized_at && <>by {run.finalized_by} on {fmtDate(run.finalized_at.slice(0, 10))} · </>}
-            {lines.length} employees · In hand ₹{inr(tot.net)} · CTC ₹{inr(tot.ctc)}
+            {locked && run.finalized_at && <>{run.finalized_by === "import" ? "imported from Google Sheet" : `by ${run.finalized_by}`} on {fmtDate(run.finalized_at.slice(0, 10))} · </>}
+            {lines.length} {lines.length === 1 ? "employee" : "employees"} · In hand ₹{inr(tot.net)} · CTC ₹{inr(tot.ctc)}
           </div>
         </div>
         <div className="row">
@@ -126,7 +126,7 @@ export default async function RunPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      <LinesEditor key={lines.map((l) => `${l.id}:${(l as { updated_at?: string }).updated_at}:${l.net_pay}`).join("|") + run.status} lines={lines} formulas={formulas} locked={locked} month={run.month} runId={run.id} removeAction={removeLine} contacts={contacts} />
+      <LinesEditor key={run.id + run.status} lines={lines} formulas={formulas} locked={locked} month={run.month} runId={run.id} removeAction={removeLine} contacts={contacts} />
 
       <div className="panel" style={{ marginTop: 16 }}>
         <h2>PF / ESI / LWF summary</h2>

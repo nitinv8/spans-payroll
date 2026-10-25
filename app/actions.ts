@@ -183,11 +183,12 @@ export async function saveLine(lineId: string, inputs: LineInputs & { remarks?: 
   let run;
   try { run = await loadRun(sb, line.run_id); } catch (e) { return { error: (e as Error).message }; }
   if (run.status === "finalized") return { error: "This month is finalized. Reopen it to edit." };
+  const num = (v: unknown, allowNegative = false) => { const x = Number(v) || 0; return allowNegative ? x : Math.max(0, x); };
   const clean: LineInputs = {
-    working_days: Number(inputs.working_days) || 0, paid_offs: Number(inputs.paid_offs) || 0, leaves: Number(inputs.leaves) || 0,
-    lop_days: Number(inputs.lop_days) || 0, incentive: Number(inputs.incentive) || 0, arrears: Number(inputs.arrears) || 0,
-    ex_gratia: Number(inputs.ex_gratia) || 0, manual_adjustment: Number(inputs.manual_adjustment) || 0,
-    professional_tax: Number(inputs.professional_tax) || 0,
+    working_days: num(inputs.working_days), paid_offs: num(inputs.paid_offs), leaves: num(inputs.leaves),
+    lop_days: num(inputs.lop_days), incentive: num(inputs.incentive), arrears: num(inputs.arrears),
+    ex_gratia: num(inputs.ex_gratia), manual_adjustment: num(inputs.manual_adjustment, true),
+    professional_tax: num(inputs.professional_tax), advance_recovery: num(inputs.advance_recovery), other_deduction: num(inputs.other_deduction),
   };
   const r = computeLine(run.formulas, run.month, line.snapshot, line.structure, clean);
   const { data: saved, error: e2 } = await sb.from("payroll_lines")
@@ -264,8 +265,9 @@ export async function addEmployeeToRun(form: FormData) {
   const sv = s ? structureValues(s) : null;
   const snap = snapshotOf(e as Employee);
   const d = defaultDays(e as Employee, run.month);
+  const ot = await otTotals(sb, run.month);
   const inputs: LineInputs = { working_days: d.working_days, paid_offs: d.paid_offs, leaves: 0, lop_days: d.lop_days,
-    incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 };
+    incentive: ot[employeeId] || 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 };
   const r = computeLine(run.formulas, run.month, snap, sv, inputs);
   const { error } = await sb.from("payroll_lines").insert({ run_id: runId, employee_id: employeeId, print_code: `C${(count || 0) + 1}`,
     snapshot: snap, structure: sv, structure_id: s?.id ?? null, ...inputs, ...r });

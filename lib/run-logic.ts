@@ -1,10 +1,10 @@
-import { calculate, daysInMonth, monthEnd, type FormulaRow, type StructureFields } from "./payroll";
+import { calculate, daysInMonth, monthEnd, stateOf, type FormulaRow, type StructureFields } from "./payroll";
 
 export type Employee = {
   id: string; emp_code: string; name: string; father_name: string | null; designation: string | null;
   location: string | null; status: string; date_of_joining: string | null; date_of_leaving: string | null;
   uan: string | null; esic_number: string | null; bank_account: string | null; ifsc: string | null; bank_name: string | null;
-  email: string | null; bank_advice_email?: string | null; orgzit_description: string | null; orgzit_id: string | null; include_in_bank_file: boolean;
+  email: string | null; bank_advice_email?: string | null; state?: string | null; orgzit_description: string | null; orgzit_id: string | null; include_in_bank_file: boolean;
   sort_order: number; pan?: string | null;
 };
 
@@ -13,6 +13,7 @@ export type Structure = StructureFields & { id: string; employee_id: string; eff
 export type LineInputs = {
   working_days: number; paid_offs: number; leaves: number; lop_days: number; incentive: number; arrears: number;
   ex_gratia: number; manual_adjustment: number; professional_tax: number;
+  advance_recovery?: number; other_deduction?: number;
 };
 
 export const empNum = (code: string) => Number((code.match(/\d+/) || ["9999"])[0]);
@@ -49,12 +50,14 @@ export function defaultDays(e: Employee, month: string) {
     else worked++;
   }
   const notEmployed = dim - (end - start + 1);
-  return { working_days: worked, paid_offs: sundays, leaves: 0, lop_days: notEmployed > 0 ? notEmployed : 0, leaves_out: notEmployed };
+  // worked + offs + LOP always add up to the calendar days in the month
+  return { working_days: worked, paid_offs: sundays, leaves: 0, lop_days: notEmployed > 0 ? notEmployed : 0 };
 }
 
 export function snapshotOf(e: Employee) {
   return {
     name: e.name, father_name: e.father_name, emp_code: e.emp_code, designation: e.designation, location: e.location,
+    state: stateOf(e.state, e.location),
     status: e.status, date_of_joining: e.date_of_joining, date_of_leaving: e.date_of_leaving, uan: e.uan,
     esic_number: e.esic_number, bank_account: e.bank_account, ifsc: e.ifsc, bank_name: e.bank_name, email: e.email, bank_advice_email: e.bank_advice_email ?? null,
     orgzit_description: e.orgzit_description, orgzit_id: e.orgzit_id, include_in_bank_file: e.include_in_bank_file,
@@ -82,6 +85,7 @@ export function computeLine(
   try {
     const calc = calculate(formulas, structure, { month, ...inputs }, {
       location: snap.location || "", designation: snap.designation || "", date_of_joining: snap.date_of_joining,
+      state: (snap as { state?: string | null }).state ?? null,
     });
     return { calc, gross: calc.gross, net_pay: calc.net_pay, ctc: calc.ctc, error: null as string | null };
   } catch (e) {

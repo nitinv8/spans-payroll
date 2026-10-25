@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { pageDb, fmtDate } from "@/lib/data";
-import { inr } from "@/lib/payroll";
+import { inr, thisMonthIST } from "@/lib/payroll";
 import { sortEmployees, structureForMonth, type Structure } from "@/lib/run-logic";
 import { waNumber } from "@/lib/contact";
 
@@ -12,7 +12,7 @@ export default async function Employees({ searchParams }: { searchParams: { stat
     sb.from("employees").select("*"),
     sb.from("salary_structures").select("*"),
   ]);
-  const today = new Date().toISOString().slice(0, 7) + "-01";
+  const today = thisMonthIST();
   const counts: Record<string, number> = { All: (emps || []).length };
   for (const e of emps || []) counts[e.status] = (counts[e.status] || 0) + 1;
   const list = sortEmployees(emps || []).filter((e) =>

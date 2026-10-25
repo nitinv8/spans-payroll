@@ -23,7 +23,7 @@ export default function OtForm({ employees, month, action }: { employees: Emp[];
           <select id="ot-emp" name="employee_id" value={emp} onChange={(x) => setEmp(x.target.value)}>
             {employees.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select></div>
-        <div><label htmlFor="ot-site">Site</label><input id="ot-site" name="site" defaultValue={e?.location?.includes("Haryana") ? "Lotte, Rohtak" : e?.location?.includes("Karnataka") ? "Griffith, Karnataka" : ""} key={emp} /></div>
+        <div><label htmlFor="ot-site">Site</label><input id="ot-site" name="site" defaultValue={e?.location ?? ""} key={emp} /></div>
         <div><label htmlFor="ot-days">Extra days</label><input id="ot-days" name="days" type="number" step="0.5" value={days} onChange={(x) => setDays(x.target.value)} /></div>
         <div>
           <label htmlFor="ot-amt">Amount (₹)</label>

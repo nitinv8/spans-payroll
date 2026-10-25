@@ -1,6 +1,6 @@
 // Salary slip PDF – same layout as the "FY2026-27-Salary Slips" tab, generated server-side with pdf-lib.
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
-import { monthLabel, type FormulaRow } from "./payroll";
+import { monthLabel, todayIST, type FormulaRow } from "./payroll";
 import type { LineRow } from "./exports";
 
 export type Company = { name: string; address: string | null; pan: string | null; cin: string | null; slip_notes: string | null };
@@ -70,7 +70,7 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   const rightCol: [string, string][] = [
     ["UAN", s.uan || "Not applicable"], ["Date of Joining", dmy(s.date_of_joining)],
     draft ? ["Status", "Proposed (not yet joined)"] : ["Bank A/c", s.bank_account ? `XXXX${s.bank_account.replace(/\s/g, "").slice(-4)}` : ""],
-    draft ? ["Prepared on", dmy(new Date().toISOString().slice(0, 10))] : ["Salary Month", monthLabel(month)],
+    draft ? ["Prepared on", dmy(todayIST())] : ["Salary Month", monthLabel(month)],
   ];
   for (let i = 0; i < 4; i++) {
     text(left[i][0], M, y, 8.5, font, muted); text(left[i][1], M + 105, y, 9.5, bold);
@@ -120,14 +120,14 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   head("Employee Salary Deductions", L1, R1, y); y -= 18;
   for (const d of deductions) {
     const v = Number(c[d.key]) || 0;
-    if (d.key === "professional_tax" && v === 0) continue;
+    if (["professional_tax", "d_advance", "d_other"].includes(d.key) && v === 0) continue;
     text(d.label, L1 + 6, y); right(fmt(v), R1 - 6, y); y -= 14;
   }
   page.drawLine({ start: { x: L1, y: y + 9 }, end: { x: R1, y: y + 9 }, thickness: 0.6, color: line });
   text("Total Employee Deductions", L1 + 6, y - 2, 9.5, bold); right(fmt(c.total_deductions), R1 - 6, y - 2, 9.5, bold);
   y -= 16;
   if (Math.abs(Number(l.manual_adjustment) || 0) >= 0.5) {
-    text("Adjustment" + (l.remarks ? ` (${l.remarks.slice(0, 30)})` : ""), L1 + 6, y - 2, 9.5);
+    text((Number(l.manual_adjustment) > 0 ? "Other addition" : "Other adjustment") + (l.remarks ? ` (${l.remarks.slice(0, 30)})` : ""), L1 + 6, y - 2, 9.5);
     right((Number(l.manual_adjustment) > 0 ? "+" : "") + fmt(l.manual_adjustment), R1 - 6, y - 2, 9.5);
     y -= 16;
   }

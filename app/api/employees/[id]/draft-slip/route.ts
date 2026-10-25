@@ -2,7 +2,7 @@
 // with the formulas in force for the current month and a full month of attendance. Nothing is saved.
 import { apiDb, download } from "@/lib/api";
 import { buildSlipsPdf, type Company } from "@/lib/slip-pdf";
-import { DEFAULT_FORMULAS, daysInMonth, monthEnd, type FormulaRow } from "@/lib/payroll";
+import { DEFAULT_FORMULAS, daysInMonth, monthEnd, thisMonthIST, type FormulaRow } from "@/lib/payroll";
 import { computeLine, snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
 import type { LineRow } from "@/lib/exports";
 
@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const s = structs?.[0] as Structure | undefined;
   if (!s) return new Response("Add a salary structure for this person first (Salary history tab).", { status: 400 });
 
-  const month = new Date().toISOString().slice(0, 7) + "-01";
+  const month = thisMonthIST();
   const { data: sets } = await g.sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(month)).order("effective_from", { ascending: false }).limit(1);
   const formulas = (sets?.[0]?.formulas as FormulaRow[]) || DEFAULT_FORMULAS;
 

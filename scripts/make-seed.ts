@@ -3,7 +3,7 @@
 // and April–September 2026 as finalized payroll runs.
 // Usage: npm run seed -- you@spans.co.in other@spans.co.in   (emails allowed to log in)
 import { writeFileSync } from "node:fs";
-import { DEFAULT_FORMULAS, monthLabel } from "../lib/payroll";
+import { SHEET_FORMULAS_FY26, monthLabel } from "../lib/payroll";
 import { computeLine, snapshotOf, type Employee } from "../lib/run-logic";
 import { EMPLOYEES, STRUCTURES, HISTORY, ORGZIT, EXCLUDE_FROM_BANK_FILE, EMPLOYEE_NOTES, OT_LOG, PAYMENT_DATES } from "../data/sheet-import";
 import { toStructure } from "../data/to-structure";
@@ -24,7 +24,7 @@ const out: string[] = [
 
 for (const a of allowed) out.push(`insert into app_users (email) values (${q(a.toLowerCase())}) on conflict do nothing;`);
 
-out.push(`insert into formula_sets (effective_from, name, formulas, notes) values ('2026-04-01', 'FY2026-27 (from Google Sheet)', ${j(DEFAULT_FORMULAS)}, 'Reproduces the FY2026-27 Salary Sheet formulas') on conflict (effective_from) do nothing;`);
+out.push(`insert into formula_sets (effective_from, name, formulas, notes) values ('2026-04-01', 'FY2026-27 (from Google Sheet)', ${j(SHEET_FORMULAS_FY26)}, 'Reproduces the FY2026-27 Salary Sheet formulas') on conflict (effective_from) do nothing;`);
 
 const employees: Record<string, Employee> = {};
 EMPLOYEES.forEach((e, i) => {
@@ -55,13 +55,13 @@ for (const [month, code, site, days, amount, remarks] of OT_LOG)
 
 for (const [month, rows] of Object.entries(HISTORY)) {
   out.push(`-- ${monthLabel(month)}`);
-  out.push(`insert into payroll_runs (month, status, payment_date, formula_set_id, formulas, notes) values ('${month}', 'draft', ${q(PAYMENT_DATES[month] ?? null)}, (select id from formula_sets where effective_from = '2026-04-01'), ${j(DEFAULT_FORMULAS)}, 'Imported from Google Sheet') on conflict (month) do nothing;`);
+  out.push(`insert into payroll_runs (month, status, payment_date, formula_set_id, formulas, notes) values ('${month}', 'draft', ${q(PAYMENT_DATES[month] ?? null)}, (select id from formula_sets where effective_from = '2026-04-01'), ${j(SHEET_FORMULAS_FY26)}, 'Imported from Google Sheet') on conflict (month) do nothing;`);
   rows.forEach(([code, w, o, l, inc, man], i) => {
     const e = employees[code];
     const snap = snapshotOf(e);
     const s = toStructure(STRUCTURES[code]);
     const inputs = { working_days: w, paid_offs: o, leaves: l, lop_days: 0, incentive: inc, arrears: 0, ex_gratia: 0, manual_adjustment: man, professional_tax: 0 };
-    const r = computeLine(DEFAULT_FORMULAS, month, snap, s, inputs);
+    const r = computeLine(SHEET_FORMULAS_FY26, month, snap, s, inputs);
     out.push(`insert into payroll_lines (run_id, employee_id, print_code, snapshot, structure_id, structure, working_days, paid_offs, leaves, lop_days, incentive, arrears, ex_gratia, manual_adjustment, professional_tax, calc, gross, net_pay, ctc, error) values ((select id from payroll_runs where month = '${month}'), ${emp(code)}, 'C${i + 1}', ${j(snap)}, (select id from salary_structures where employee_id = ${emp(code)} and effective_from = '2026-04-01'), ${j(s)}, ${w}, ${o}, ${l}, 0, ${inc}, 0, 0, ${man}, 0, ${j(r.calc)}, ${r.gross}, ${r.net_pay}, ${r.ctc}, null) on conflict do nothing;`);
   });
   out.push(`update payroll_runs set status = 'finalized', finalized_at = now(), finalized_by = 'import' where month = '${month}';`);

@@ -5,7 +5,7 @@ import ConfirmButton from "@/components/Confirm";
 import SendSlip from "@/components/SendSlip";
 import { waNumber } from "@/lib/contact";
 import { pageDb, fmtDate } from "@/lib/data";
-import { inr, monthLabel, monthEnd, DEFAULT_FORMULAS, type FormulaRow } from "@/lib/payroll";
+import { inr, monthLabel, monthEnd, thisMonthIST, DEFAULT_FORMULAS, type FormulaRow } from "@/lib/payroll";
 import { computeLine, snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
 import { saveStructure, deleteStructure, deleteEmployee } from "@/app/actions";
 
@@ -30,7 +30,7 @@ export default async function EmployeePage({ params, searchParams }: { params: {
       ? sb.from("payroll_lines").select("id, run_id, gross, net_pay, ctc, incentive, manual_adjustment, working_days, paid_offs, leaves, lop_days, payroll_runs(month, status)").eq("employee_id", params.id)
       : Promise.resolve({ data: null }),
     sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("employee_id", params.id),
-    sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(new Date().toISOString().slice(0, 7) + "-01")).order("effective_from", { ascending: false }).limit(1),
+    sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(thisMonthIST())).order("effective_from", { ascending: false }).limit(1),
   ]);
   if (!e) notFound();
   const locations = Array.from(new Set((all || []).map((x) => x.location).filter(Boolean))) as string[];
@@ -39,7 +39,7 @@ export default async function EmployeePage({ params, searchParams }: { params: {
   // Estimated in-hand for the draft message (same calculation as the draft slip)
   let draftNet: number | null = null;
   if (e.status === "Draft" && latest) {
-    const m = new Date().toISOString().slice(0, 7) + "-01";
+    const m = thisMonthIST();
     const r = computeLine((sets?.[0]?.formulas as FormulaRow[]) || DEFAULT_FORMULAS, m, snapshotOf(e as Employee), structureValues(latest as Structure),
       { working_days: 30, paid_offs: 0, leaves: 0, lop_days: 0, incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 });
     draftNet = r.net_pay;
@@ -78,7 +78,7 @@ export default async function EmployeePage({ params, searchParams }: { params: {
             <div className="row">
               <a className="btn primary" href={`/api/employees/${e.id}/draft-slip`}>Download draft salary slip</a>
               {draftNet != null && <span className="muted">Estimated in-hand: <b>₹{inr(draftNet)}</b>/month</span>}
-              <SendSlip url={`/api/employees/${e.id}/draft-slip`} draft name={e.name} month={new Date().toISOString().slice(0, 7) + "-01"}
+              <SendSlip url={`/api/employees/${e.id}/draft-slip`} draft name={e.name} month={thisMonthIST()}
                 netPay={draftNet} contact={{ email: e.email, mobile: e.mobile }} />
             </div>
           ) : (

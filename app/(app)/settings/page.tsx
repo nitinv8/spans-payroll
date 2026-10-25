@@ -2,6 +2,7 @@ import Link from "next/link";
 import { pageDb } from "@/lib/data";
 import { saveCompany, addAppUser, removeAppUser } from "@/app/actions";
 import PasswordForm from "@/components/PasswordForm";
+import ConfirmButton from "@/components/Confirm";
 
 export default async function Settings() {
   const { sb, user } = await pageDb();
@@ -56,7 +57,7 @@ export default async function Settings() {
           <table><tbody>
             {(users || []).map((u) => (
               <tr key={u.email}><td>{u.email}</td><td className="muted">{u.name}</td>
-                <td>{u.email !== user?.email && <form action={removeAppUser}><input type="hidden" name="email" value={u.email} /><button className="btn sm danger">Remove</button></form>}</td></tr>
+                <td>{u.email !== user?.email && <form action={removeAppUser}><input type="hidden" name="email" value={u.email} /><ConfirmButton className="btn sm danger" message={`Remove ${u.email} from the allowed list? They will lose access immediately.`}>Remove</ConfirmButton></form>}</td></tr>
             ))}
           </tbody></table>
           <form action={addAppUser} className="row" style={{ marginTop: 10, alignItems: "end" }}>

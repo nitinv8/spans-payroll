@@ -1,5 +1,5 @@
 // Re-computes every month processed in the Google Sheet and compares in-hand salary to the rupee.
-import { DEFAULT_FORMULAS, calculate, validateFormulas, suggestOtIncentive } from "../lib/payroll";
+import { DEFAULT_FORMULAS, SHEET_FORMULAS_FY26, calculate, validateFormulas, suggestOtIncentive } from "../lib/payroll";
 import { parse, evalNode } from "../lib/formula";
 import { EMPLOYEES, STRUCTURES, HISTORY, CTC_CHECKS } from "../data/sheet-import";
 import { toStructure } from "../data/to-structure";
@@ -11,12 +11,12 @@ const check = (name: string, got: number, want: number, tol = 0.5) => {
   else { fail++; console.log(`✗ ${name}: got ${got}, sheet ${want}`); }
 };
 
-const errs = validateFormulas(DEFAULT_FORMULAS);
+const errs = [...validateFormulas(SHEET_FORMULAS_FY26), ...validateFormulas(DEFAULT_FORMULAS)];
 if (errs.length) { console.log("Formula validation errors:", errs); process.exit(1); }
 
 const emp = (code: string) => EMPLOYEES.find((e) => e.code === code)!;
 const run = (month: string, code: string, w: number, o: number, l: number, inc: number, man: number) =>
-  calculate(DEFAULT_FORMULAS, toStructure(STRUCTURES[code]), {
+  calculate(SHEET_FORMULAS_FY26, toStructure(STRUCTURES[code]), {
     month, working_days: w, paid_offs: o, leaves: l, lop_days: 0, incentive: inc, arrears: 0, ex_gratia: 0,
     manual_adjustment: man, professional_tax: 0,
   }, { location: emp(code).location, designation: emp(code).designation, date_of_joining: null });
@@ -39,10 +39,10 @@ const pri = run("2026-08-01", "Emp 37", 26, 4, 1, 1354, 0);
 check("Pritam Aug ESI emp", pri.esi_employee, 137, 0); check("Pritam Aug ESI er", pri.esi_employer, 590, 0);
 
 // LOP pro-rating sanity: 3 LOP days of 30 on Satish
-const lop = calculate(DEFAULT_FORMULAS, toStructure(STRUCTURES["Emp 14"]), {
+const lop = calculate(SHEET_FORMULAS_FY26, toStructure(STRUCTURES["Emp 14"]), {
   month: "2026-09-01", working_days: 23, paid_offs: 4, leaves: 3, lop_days: 3, incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0,
 }, { location: "Haryana (Rohtak)", designation: "", date_of_joining: null });
-check("LOP gross", lop.gross, 20501 * 0.9, 0.05);
+check("LOP gross", lop.gross, 20501 * 27 / 30, 0.05);
 
 // Formula language
 const ev = (s: string, ctx = {}) => evalNode(parse(s), ctx);
@@ -66,6 +66,39 @@ check("draft excluded", eligibleForMonth({ ...base, status: "Draft" }, "2026-10-
 check("active included", eligibleForMonth({ ...base, status: "Active" }, "2026-10-01") ? 1 : 0, 1, 0);
 check("leaver in leaving month", eligibleForMonth({ ...base, status: "Inactive", date_of_leaving: "2026-10-15" }, "2026-10-01") ? 1 : 0, 1, 0);
 check("leaver after leaving", eligibleForMonth({ ...base, status: "Inactive", date_of_leaving: "2026-09-15" }, "2026-10-01") ? 1 : 0, 0, 0);
+
+// ── October 2026 defaults ──
+const oct = (code: string, over: Partial<Record<string, number>> = {}, month = "2026-10-01", state?: string, sOver: Partial<ReturnType<typeof toStructure>> = {}) =>
+  calculate(DEFAULT_FORMULAS, { ...toStructure(STRUCTURES[code]), ...sOver }, {
+    month, working_days: 27, paid_offs: 4, leaves: 0, lop_days: 0, incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0, ...over,
+  }, { location: emp(code).location, designation: emp(code).designation, date_of_joining: null, state: state ?? null });
+// Joiner on 16 Nov (30-day month): 15 days not employed → half pay, never ₹0
+const joiner = oct("Emp 37", { working_days: 13, paid_offs: 2, lop_days: 15 }, "2026-11-01");
+check("joiner half gross", joiner.gross, 16781 / 2, 0.01);
+check("joiner pay > 0", joiner.net_pay > 0 ? 1 : 0, 1, 0);
+check("LOP > days clamps to 0", oct("Emp 37", { lop_days: 40 }).gross, 0, 0);
+// PF at ₹25,000 ceiling: all-basic ₹16,781 operator → 12% = 2014; employer = EPS 1250 + EPF 764 + EDLI 84 + admin 84
+const op = oct("Emp 37");
+check("PF ee 25k ceiling", op.pf_employee, 2014, 0);
+check("EPS capped at 15k", op.eps, 1250, 0);
+check("PF er total", op.pf_employer, 1250 + 764 + 84 + 84, 0);
+// Old-ceiling equivalence: wage 15,000 gives the familiar 1800 / 1950
+check("PF er at 15k = 1950", oct("Emp 37", {}, "2026-10-01", undefined, { basic: 15000 }).pf_employer, 1950, 0);
+// Karnataka PT: Mukund (33,200 gross) 200; 300 in Feb; Khem (22,951) nil
+check("KA PT Oct", oct("Emp 46").professional_tax, 200, 0);
+check("KA PT Feb", oct("Emp 46", {}, "2027-02-01").professional_tax, 300, 0);
+check("KA PT below threshold", oct("Emp 43").professional_tax, 0, 0);
+check("Haryana no PT", oct("Emp 14").professional_tax, 0, 0);
+// Haryana LWF (flag on): 0.2% capped at 35 / 0.4% capped at 70
+const lw = oct("Emp 14", {}, "2026-10-01", undefined, { lwf_applicable: true });
+check("HR LWF ee cap 35", lw.lwf_employee, 35, 0);
+check("HR LWF er cap 70", lw.lwf_employer, 70, 0);
+check("KA LWF Dec", oct("Emp 43", {}, "2026-12-01", undefined, { lwf_applicable: true }).lwf_employee, 50, 0);
+check("KA LWF not Oct", oct("Emp 43", {}, "2026-10-01", undefined, { lwf_applicable: true }).lwf_employee, 0, 0);
+// Typed deductions reduce in-hand and appear in total deductions; net rounded to rupee
+const ded = oct("Emp 14", { advance_recovery: 1000, other_deduction: 250.4 });
+check("typed deductions", ded.total_deductions, ded.esi_employee + ded.pf_employee + 1250.4, 0.01);
+check("net rounded", ded.net_pay % 1, 0, 0);
 
 console.log(`\n${pass} checks passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

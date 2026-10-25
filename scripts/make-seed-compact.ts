@@ -2,7 +2,7 @@
 // Writes seed-compact/1-base.sql (users, formulas, employees, structures, OT, runs)
 // and seed-compact/2-lines-<month>.sql (payroll lines; snapshot/structure rebuilt in SQL, calc as a value array).
 import { mkdirSync, writeFileSync } from "node:fs";
-import { DEFAULT_FORMULAS } from "../lib/payroll";
+import { SHEET_FORMULAS_FY26 } from "../lib/payroll";
 import { computeLine, snapshotOf, type Employee } from "../lib/run-logic";
 import { EMPLOYEES, STRUCTURES, HISTORY, ORGZIT, EXCLUDE_FROM_BANK_FILE, EMPLOYEE_NOTES, OT_LOG, PAYMENT_DATES } from "../data/sheet-import";
 import { toStructure } from "../data/to-structure";
@@ -12,11 +12,11 @@ const out = process.argv[2] || "seed-compact";
 mkdirSync(out, { recursive: true });
 const q = (v: unknown) => (v == null || v === "" ? "null" : `'${String(v).replace(/'/g, "''")}'`);
 const blank = (v: string) => (/^(not applicable|not eligible)$/i.test(v.trim()) ? "" : v.trim());
-const keys = DEFAULT_FORMULAS.map((f) => f.key);
+const keys = SHEET_FORMULAS_FY26.map((f) => f.key);
 
 const base: string[] = [];
 base.push(`insert into app_users (email) values ('nverma@spans.co.in'),('nitinv8@gmail.com');`);
-base.push(`insert into formula_sets (effective_from, name, formulas, notes) values ('2026-04-01','FY2026-27 (from Google Sheet)',${q(JSON.stringify(DEFAULT_FORMULAS))}::jsonb,'Reproduces the FY2026-27 Salary Sheet formulas');`);
+base.push(`insert into formula_sets (effective_from, name, formulas, notes) values ('2026-04-01','FY2026-27 (from Google Sheet)',${q(JSON.stringify(SHEET_FORMULAS_FY26))}::jsonb,'Reproduces the FY2026-27 Salary Sheet formulas');`);
 
 const cols = ["emp_code","name","father_name","designation","location","status","dob","date_of_joining","date_of_leaving","mobile","email","bank_advice_email","bank_account","ifsc","aadhaar","pan","uan","esic_number","blood_group","tshirt_size","shoe_size","tshirt_status","id_card","epf_kyc","orgzit_description","orgzit_id","include_in_bank_file","sort_order","notes"];
 const empRows: Record<string, Employee> = {};
@@ -55,7 +55,7 @@ writeFileSync(`${out}/1-base.sql`, base.join("\n\n") + "\n");
 // Lines: one file covering all months; snapshot & structure rebuilt from tables, calc from value arrays
 const lineVals: string[] = [];
 for (const [month, rows] of Object.entries(HISTORY)) rows.forEach(([code, w, o, l, inc, man], i) => {
-  const r = computeLine(DEFAULT_FORMULAS, month, snapshotOf(empRows[code]), toStructure(STRUCTURES[code]), {
+  const r = computeLine(SHEET_FORMULAS_FY26, month, snapshotOf(empRows[code]), toStructure(STRUCTURES[code]), {
     working_days: w, paid_offs: o, leaves: l, lop_days: 0, incentive: inc, arrears: 0, ex_gratia: 0, manual_adjustment: man, professional_tax: 0 });
   const c = r.calc as Record<string, number>;
   lineVals.push(`('${month}','${code}','C${i + 1}',${w},${o},${l},${inc},${man},'{${keys.map((k) => c[k]).join(",")}}')`);
