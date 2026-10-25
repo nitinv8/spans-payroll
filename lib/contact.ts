@@ -8,3 +8,9 @@ export const waNumber = (m: string | null | undefined) => {
   if (d.length === 11 && d.startsWith("0")) return `91${d.slice(1)}`;
   return d.length >= 8 ? d : "";
 };
+
+/** Masks an ID / account number to its last 4 characters, e.g. ••••1234. */
+export const mask = (v: string | null | undefined) => {
+  const s = (v || "").replace(/\s/g, "");
+  return s ? `••••${s.slice(-4)}` : "";
+};

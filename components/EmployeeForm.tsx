@@ -1,5 +1,6 @@
 import { saveEmployee } from "@/app/actions";
-import SensitiveField, { mask } from "./SensitiveField";
+import SensitiveField from "./SensitiveField";
+import { mask } from "@/lib/contact";
 
 type E = Record<string, any>;
 const F = ({ name, label, e, type = "text", wide = false, list }: { name: string; label: string; e: E; type?: string; wide?: boolean; list?: string }) => (

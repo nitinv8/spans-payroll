@@ -4,10 +4,6 @@
 import { useState } from "react";
 import { revealSensitive } from "@/app/actions";
 
-export const mask = (v: string | null | undefined) => {
-  const s = (v || "").replace(/\s/g, "");
-  return s ? `••••${s.slice(-4)}` : "";
-};
 
 export default function SensitiveField({ name, label, employeeId, masked }: {
   name: "aadhaar" | "pan" | "bank_account"; label: string; employeeId?: string; masked: string;
