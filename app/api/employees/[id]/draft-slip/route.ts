@@ -29,6 +29,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const line = { id: "draft", print_code: null, snapshot: snap, ...inputs, ...r, calc: r.calc as Record<string, number>, remarks: null } as LineRow;
 
   const { data: company } = await g.sb.from("company_settings").select("*").eq("id", 1).single();
-  const pdf = await buildSlipsPdf(company as Company, month, formulas, [line], true);
+  const pdf = await buildSlipsPdf(company as Company, month, formulas, [line], "candidate");
   return download(Buffer.from(pdf), `Spans Draft Salary Break-up - ${e.name.replace(/[^\w .-]/g, "")}.pdf`, "application/pdf");
 }

@@ -33,7 +33,7 @@ const orgz = { created_by: "Nitin", created_by_id: "nverma@spans.co.in", type_of
 const h = hdfcCsv(run, lines); writeFileSync(`${out}/${h.filename}`, h.csv);
 const o = orgzitCsv(run, lines, orgz); writeFileSync(`${out}/${o.filename}`, o.csv);
 const g = registerCsv(run, lines); writeFileSync(`${out}/${g.filename}`, g.csv);
-console.log("HDFC rows", h.count, "skipped", h.skipped);
+console.log("HDFC rows", h.count, "total", h.total, "skipped", h.skipped.map((x) => `${x.name}: ${x.reason}`));
 console.log("Orgzit rows", o.count);
 console.table(complianceSummary(lines));
 const company = { name: "Spans Envirotech Pvt. Ltd.", address: "405-406, Woodbury Towers, Charmwood Village, Surajkund Road, Faridabad-121009",

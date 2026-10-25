@@ -2,6 +2,7 @@ import Link from "next/link";
 import { pageDb } from "@/lib/data";
 import { saveCompany, addAppUser, removeAppUser } from "@/app/actions";
 import PasswordForm from "@/components/PasswordForm";
+import TwoStep from "@/components/TwoStep";
 import ConfirmButton from "@/components/Confirm";
 
 export default async function Settings() {
@@ -16,7 +17,7 @@ export default async function Settings() {
   );
   return (
     <>
-      <div className="pagehead"><div><h1>Settings</h1><div className="muted">Company details, Orgzit export, users. Rates and formulas are under <Link href="/settings/formulas">Formulas</Link>.</div></div></div>
+      <div className="pagehead"><div><h1>Settings</h1><div className="muted">Company details, Orgzit export, users. Rates and formulas are under <Link href="/settings/formulas">Formulas</Link>. See every change in the <Link href="/settings/audit">Audit log</Link>.</div></div></div>
       <form action={saveCompany}>
         <div className="panel">
           <h2>Company (salary slip header)</h2>
@@ -69,6 +70,8 @@ export default async function Settings() {
         <div className="panel">
           <h2>Your password</h2>
           <PasswordForm />
+          <h2 style={{ marginTop: 22 }}>Two-step login</h2>
+          <TwoStep />
         </div>
       </div>
     </>

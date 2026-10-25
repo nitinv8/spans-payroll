@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { pageDb, fmtDate } from "@/lib/data";
 import { inr, monthLabel, financialYear, type FormulaRow } from "@/lib/payroll";
-import { complianceSummary, type LineRow } from "@/lib/exports";
+import { complianceSummary, hdfcCsv, type LineRow, type RunRow } from "@/lib/exports";
+import { lineChecks } from "@/lib/checks";
+import ConfirmLink from "@/components/ConfirmLink";
 import { eligibleForMonth, sortEmployees, type Employee } from "@/lib/run-logic";
 import ConfirmButton from "@/components/Confirm";
 import LinesEditor from "./LinesEditor";
@@ -22,6 +24,15 @@ export default async function RunPage({ params }: { params: { id: string } }) {
   if (!run) notFound();
   const lines = ((rawLines || []) as (LineRow & { employee_id: string })[]).sort(
     (a, b) => Number(a.print_code?.slice(1)) - Number(b.print_code?.slice(1)));
+  // Export history and last month's bank accounts (for the change alert)
+  const [{ data: exportsLog }, { data: prevRuns }] = await Promise.all([
+    sb.from("export_log").select("kind, rows, total, actor, at").eq("run_id", run.id).order("at", { ascending: false }),
+    sb.from("payroll_runs").select("id").lt("month", run.month).order("month", { ascending: false }).limit(1),
+  ]);
+  const { data: prevLines } = prevRuns?.[0]
+    ? await sb.from("payroll_lines").select("employee_id, snapshot").eq("run_id", prevRuns[0].id)
+    : { data: [] as { employee_id: string; snapshot: { bank_account?: string | null } }[] };
+  const previousBank = Object.fromEntries((prevLines || []).map((p) => [p.employee_id, (p.snapshot as { bank_account?: string | null })?.bank_account ?? null]));
   const formulas = run.formulas as FormulaRow[];
   // Current contact details (personal email/mobile), used by the send-payslip buttons
   const contacts = Object.fromEntries((emps || []).map((e) => [e.id, { email: e.email as string | null, mobile: e.mobile as string | null }]));
@@ -30,12 +41,22 @@ export default async function RunPage({ params }: { params: { id: string } }) {
   const present = new Set(lines.map((l) => l.employee_id));
   const addable = sortEmployees((emps || []) as Employee[]).filter((e) => !present.has(e.id) && e.status !== "Draft");
   const missingEligible = addable.filter((e) => eligibleForMonth(e, run.month));
-  const errors = lines.filter((l) => l.error);
   const noOrgzit = lines.filter((l) => !l.snapshot.orgzit_id);
   const noBank = lines.filter((l) => l.snapshot.include_in_bank_file && (!l.snapshot.bank_account || !l.snapshot.ifsc));
   const dupOrgzit = Object.entries(lines.reduce<Record<string, string[]>>((m, l) => {
     if (l.snapshot.orgzit_id) (m[l.snapshot.orgzit_id] ||= []).push(l.snapshot.name); return m;
   }, {})).filter(([, names]) => names.length > 1);
+  const esiCeiling = Number((run.formulas as FormulaRow[]).find((f) => f.key === "esi_wage_ceiling")?.expr) || 21000;
+  const checks = lineChecks(run.month, lines, { esiCeiling, previousBank });
+  const bankChanged = checks.filter((c) => c.text.startsWith("Bank account changed")).map((c) => c.who);
+  const bank = hdfcCsv(run as RunRow, lines.filter((l) => !l.error));
+  const lastExport = (kind: string) => (exportsLog || []).find((x) => x.kind === kind);
+  const ist = (at: string) => new Date(at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+  const hdfcNotes = [
+    lastExport("hdfc") ? `The HDFC file was already generated on ${ist(lastExport("hdfc")!.at)} (₹${inr(lastExport("hdfc")!.total)}). Make sure it isn't uploaded twice.` : "",
+    bankChanged.length ? `Bank account changed since last month for: ${bankChanged.join(", ")}. Confirm these with the employees before paying.` : "",
+  ].filter(Boolean);
+  const hdfcWarning = hdfcNotes.length ? hdfcNotes.join("\n\n") + "\n\nDownload anyway?" : undefined;
   const fy = financialYear(run.month);
   const fyMissing = !(settings?.orgzit as { fy_ids?: Record<string, string> })?.fy_ids?.[fy];
   const comp = complianceSummary(lines);
@@ -65,7 +86,7 @@ export default async function RunPage({ params }: { params: { id: string } }) {
           )}
           {locked && (
             <form action={reopenRun}><input type="hidden" name="run_id" value={run.id} />
-              <ConfirmButton message="Reopen this month for editing? Any re-calculation will use the formulas stored with this month.">Reopen</ConfirmButton>
+              <ConfirmButton message={"Reopen this month for editing?\n\nThe reopen is recorded in the audit log. Bank and Orgzit files can't be downloaded again until you finalize. If the HDFC file was already uploaded, don't upload a second one."}>Reopen</ConfirmButton>
             </form>
           )}
           <Link className="btn" href="/payroll">All months</Link>
@@ -75,20 +96,64 @@ export default async function RunPage({ params }: { params: { id: string } }) {
       <div className="panel">
         <h2>Outputs</h2>
         <div className="row">
-          <a className="btn primary" href={`/api/runs/${run.id}/slips`}>Salary slips: one PDF</a>
-          <a className="btn" href={`/api/runs/${run.id}/slips-zip`}>Salary slips: ZIP of individual PDFs</a>
-          <a className="btn primary" href={`/api/runs/${run.id}/hdfc`}>HDFC bank CSV</a>
-          <a className="btn primary" href={`/api/runs/${run.id}/orgzit`}>Orgzit upload CSV</a>
+          <a className="btn" href={`/api/runs/${run.id}/slips`}>{locked ? "Salary slips: one PDF" : "Provisional slips (PDF)"}</a>
+          <a className="btn" href={`/api/runs/${run.id}/slips-zip`}>{locked ? "Slips: ZIP of individual PDFs" : "Provisional slips (ZIP)"}</a>
+          {locked ? (
+            <>
+              <ConfirmLink className="btn primary" href={`/api/runs/${run.id}/hdfc`}
+                message={hdfcWarning}>
+                HDFC bank CSV
+              </ConfirmLink>
+              <ConfirmLink className="btn primary" href={`/api/runs/${run.id}/orgzit`}
+                message={lastExport("orgzit") ? `The Orgzit file was already generated on ${ist(lastExport("orgzit")!.at)}. Uploading it twice would double-count salary in the books. Download again?` : undefined}>
+                Orgzit upload CSV
+              </ConfirmLink>
+            </>
+          ) : (
+            <>
+              <button className="btn" disabled title="Finalize the month first">HDFC bank CSV</button>
+              <button className="btn" disabled title="Finalize the month first">Orgzit upload CSV</button>
+            </>
+          )}
           <a className="btn" href={`/api/runs/${run.id}/register`}>Salary register CSV</a>
         </div>
-        {!locked && <p className="muted small" style={{ marginBottom: 0 }}>Tip: finalize before sending the bank file so the figures can&apos;t change afterwards.</p>}
+        {!locked && <p className="muted small" style={{ marginBottom: 0 }}>The HDFC and Orgzit files unlock after you <b>Finalize &amp; lock</b>, so amounts can&apos;t change after the bank file is made. Slips from an unfinalized month are marked PROVISIONAL.</p>}
+
+        <div className="grid2" style={{ marginTop: 14 }}>
+          <div>
+            <h3>Bank file preview</h3>
+            <table><tbody>
+              <tr><td>Payroll in-hand total</td><td className="num">₹{inr(tot.net)}</td></tr>
+              <tr><td>In HDFC file ({bank.count} {bank.count === 1 ? "person" : "people"})</td><td className="num"><b>₹{inr(bank.total)}</b></td></tr>
+              {bank.skipped.map((x) => (
+                <tr key={x.name}><td className="muted">Not in file: {x.name} ({x.reason})</td><td className="num muted">₹{inr(x.amount)}</td></tr>
+              ))}
+              {Math.round(tot.net - bank.total - bank.skipped.reduce((a, x) => a + x.amount, 0)) !== 0 && (
+                <tr><td style={{ color: "var(--bad)" }}>Unreconciled difference (rows with errors)</td>
+                  <td className="num" style={{ color: "var(--bad)" }}>₹{inr(tot.net - bank.total - bank.skipped.reduce((a, x) => a + x.amount, 0))}</td></tr>
+              )}
+            </tbody></table>
+          </div>
+          <div>
+            <h3>Export history</h3>
+            {!exportsLog?.length ? <p className="muted small">Nothing exported yet for this month.</p> : (
+              <table><tbody>
+                {exportsLog.slice(0, 8).map((x, i) => (
+                  <tr key={i}><td className="small">{new Date(x.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                    <td className="small">{{ hdfc: "HDFC file", orgzit: "Orgzit file", register: "Register", slips: "Slips" }[x.kind as string] ?? x.kind}</td>
+                    <td className="small num">{x.total ? `₹${inr(x.total)}` : `${x.rows}`}</td><td className="small muted">{x.actor}</td></tr>
+                ))}
+              </tbody></table>
+            )}
+          </div>
+        </div>
       </div>
 
-      {(errors.length > 0 || missingEligible.length > 0 || noOrgzit.length > 0 || noBank.length > 0 || dupOrgzit.length > 0 || fyMissing) && (
+      {(checks.length > 0 || missingEligible.length > 0 || noOrgzit.length > 0 || noBank.length > 0 || dupOrgzit.length > 0 || fyMissing) && (
         <div className="notice warn">
           <b>Check before exporting</b>
           <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-            {errors.map((l) => <li key={l.id}>{l.snapshot.name}: {l.error}</li>)}
+            {checks.map((c, i) => <li key={i} style={c.level === "error" ? { color: "var(--bad)" } : undefined}><b>{c.who}:</b> {c.text}</li>)}
             {missingEligible.length > 0 && <li>Employed this month but not on this payroll: {missingEligible.map((e) => e.name).join(", ")}</li>}
             {noBank.length > 0 && <li>Missing bank details (will be skipped in HDFC file): {noBank.map((l) => l.snapshot.name).join(", ")}</li>}
             {noOrgzit.length > 0 && <li>No Orgzit ID: {noOrgzit.map((l) => l.snapshot.name).join(", ")}</li>}
@@ -109,8 +174,13 @@ export default async function RunPage({ params }: { params: { id: string } }) {
           <form action={pullOtIncentives}><input type="hidden" name="run_id" value={run.id} />
             <ConfirmButton message="Replace each employee's Incentive with the total from OT incentives for this month?">Pull OT incentives</ConfirmButton>
           </form>
-          <form action={refreshRun}><input type="hidden" name="run_id" value={run.id} />
-            <ConfirmButton message="Re-calculate everyone with the current formulas, employee details and salary structures? Days and amounts you entered are kept.">Re-calculate with latest data</ConfirmButton>
+          <form action={refreshRun} className="recalc">
+            <input type="hidden" name="run_id" value={run.id} />
+            <div className="small muted" style={{ marginBottom: 4 }}>Re-calculate (days and amounts are kept):</div>
+            <label className="check small"><input type="checkbox" name="refresh_structures" defaultChecked /> Use current salary structures</label>
+            <label className="check small"><input type="checkbox" name="refresh_details" /> Copy current employee details (bank, UAN…)</label>
+            <label className="check small"><input type="checkbox" name="use_latest_formulas" /> Switch to latest formula version</label>
+            <ConfirmButton className="btn sm" message="Re-calculate this month with the selected options?">Re-calculate</ConfirmButton>
           </form>
           {addable.length > 0 && (
             <form action={addEmployeeToRun} className="row" style={{ alignItems: "end" }}>

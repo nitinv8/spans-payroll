@@ -57,7 +57,8 @@ export async function saveEmployee(form: FormData) {
   const { sb } = await db();
   const id = str(form, "id");
   const row: Record<string, unknown> = {};
-  for (const k of EMP_FIELDS) row[k] = str(form, k);
+  // Only fields present in the form are written (masked Aadhaar/PAN/bank fields are omitted unless revealed)
+  for (const k of EMP_FIELDS) if (form.has(k)) row[k] = str(form, k);
   row.status = row.status || "Active";
   row.include_in_bank_file = bool(form, "include_in_bank_file");
   row.sort_order = numv(form, "sort_order") || 100;
@@ -97,6 +98,17 @@ export async function saveStructure(form: FormData) {
   if (error) fail(error.message);
   revalidatePath(`/employees/${employee_id}`);
   redirect(`/employees/${employee_id}?tab=salary&saved=1`);
+}
+
+/** Returns one sensitive field in full and records who looked at it. */
+export async function revealSensitive(employeeId: string, field: "aadhaar" | "pan" | "bank_account"): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
+  if (!["aadhaar", "pan", "bank_account"].includes(field)) return { ok: false, error: "Not allowed" };
+  let sb, user;
+  try { ({ sb, user } = await db()); } catch (e) { return { ok: false, error: (e as Error).message }; }
+  const { data, error } = await sb.from("employees").select(`id, ${field}`).eq("id", employeeId).single();
+  if (error || !data) return { ok: false, error: "Employee not found" };
+  await sb.from("audit_log").insert({ actor: user.email, table_name: "employees", row_id: employeeId, action: "REVEAL", new: { field } });
+  return { ok: true, value: (data as unknown as Record<string, string | null>)[field] ?? "" };
 }
 
 /** Deletes an employee only if they have never appeared on a payroll (history must be kept). */
@@ -199,36 +211,51 @@ export async function saveLine(lineId: string, inputs: LineInputs & { remarks?: 
   return { line: saved };
 }
 
-/** Re-pulls formulas, employee details and salary structures (keeps entered days/amounts), adds newly eligible staff. */
+/**
+ * Re-calculates a draft month. Days and amounts entered are always kept; newly eligible staff are added.
+ * Options (form checkboxes):
+ *  - use_latest_formulas: switch to the formula version now in force (default: keep this month's stored formulas)
+ *  - refresh_structures:  use salary structures as they stand now for this month (default on)
+ *  - refresh_details:     copy current employee details (name, bank, UAN…) into this month (default off)
+ */
 export async function refreshRun(form: FormData) {
   const { sb } = await db();
   const runId = String(form.get("run_id"));
+  const useLatest = bool(form, "use_latest_formulas");
+  const refreshStructures = bool(form, "refresh_structures");
+  const refreshDetails = bool(form, "refresh_details");
   const run = await loadRun(sb, runId);
   if (run.status === "finalized") fail("Reopen the month first.");
-  const { id: formula_set_id, formulas } = await formulasFor(run.month);
-  await sb.from("payroll_runs").update({ formulas, formula_set_id }).eq("id", runId);
-  const { data: emps } = await sb.from("employees").select("*");
-  const { data: structs } = await sb.from("salary_structures").select("*");
-  const { data: lines } = await sb.from("payroll_lines").select("*").eq("run_id", runId);
-  const ot = await otTotals(sb, run.month);
+  let formulas = run.formulas;
+  if (useLatest) {
+    const latest = await formulasFor(run.month);
+    formulas = latest.formulas;
+    const { error } = await sb.from("payroll_runs").update({ formulas, formula_set_id: latest.id }).eq("id", runId);
+    if (error) fail(error.message);
+  }
+  const [{ data: emps }, { data: structs }, { data: lines }, ot] = await Promise.all([
+    sb.from("employees").select("*"), sb.from("salary_structures").select("*"),
+    sb.from("payroll_lines").select("*").eq("run_id", runId), otTotals(sb, run.month),
+  ]);
   const byEmp = new Map((lines || []).map((l) => [l.employee_id, l]));
-  const all = sortEmployees(emps as Employee[]);
   let code = (lines || []).length;
-  for (const e of all) {
+  for (const e of sortEmployees(emps as Employee[])) {
     const s = structureForMonth((structs as Structure[]).filter((x) => x.employee_id === e.id), run.month);
-    const sv = s ? structureValues(s) : null;
-    const snap = snapshotOf(e);
     const existing = byEmp.get(e.id);
     if (existing) {
-      const inputs: LineInputs = existing;
-      const r = computeLine(formulas, run.month, snap, sv, inputs);
-      await sb.from("payroll_lines").update({ snapshot: snap, structure: sv, structure_id: s?.id ?? null, ...r }).eq("id", existing.id);
+      const sv = refreshStructures ? (s ? structureValues(s) : null) : existing.structure;
+      const snap = refreshDetails ? snapshotOf(e) : existing.snapshot;
+      const r = computeLine(formulas, run.month, snap, sv, existing as LineInputs);
+      await sb.from("payroll_lines").update({
+        snapshot: snap, structure: sv, ...(refreshStructures ? { structure_id: s?.id ?? null } : {}), ...r,
+      }).eq("id", existing.id);
     } else if (eligibleForMonth(e, run.month)) {
+      const sv = s ? structureValues(s) : null;
       const d = defaultDays(e, run.month);
       const inputs: LineInputs = { working_days: d.working_days, paid_offs: d.paid_offs, leaves: 0, lop_days: d.lop_days,
         incentive: ot[e.id] || 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 };
-      const r = computeLine(formulas, run.month, snap, sv, inputs);
-      await sb.from("payroll_lines").insert({ run_id: runId, employee_id: e.id, print_code: `C${++code}`, snapshot: snap,
+      const r = computeLine(formulas, run.month, snapshotOf(e), sv, inputs);
+      await sb.from("payroll_lines").insert({ run_id: runId, employee_id: e.id, print_code: `C${++code}`, snapshot: snapshotOf(e),
         structure: sv, structure_id: s?.id ?? null, ...inputs, ...r });
     }
   }

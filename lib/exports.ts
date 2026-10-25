@@ -39,14 +39,14 @@ export const HDFC_HEADER = [
 export function hdfcCsv(run: RunRow, lines: LineRow[]) {
   const date = ddmmyyyy(run.payment_date || todayIST());
   const ref = `Salary${monthTag(run.month)}`.slice(0, 20);
-  const skipped: string[] = [];
+  const skipped: { name: string; reason: string; amount: number }[] = [];
   const rows: unknown[][] = [HDFC_HEADER];
   for (const l of lines) {
     const s = l.snapshot;
     const amt = Math.round(Number(l.net_pay) || 0);
-    if (!s.include_in_bank_file) { skipped.push(`${s.name} (excluded from bank file)`); continue; }
-    if (amt <= 0) { skipped.push(`${s.name} (amount ${amt})`); continue; }
-    if (!s.bank_account || !s.ifsc) { skipped.push(`${s.name} (missing bank details)`); continue; }
+    if (!s.include_in_bank_file) { skipped.push({ name: s.name, reason: "paid outside the bulk file", amount: amt }); continue; }
+    if (amt <= 0) { skipped.push({ name: s.name, reason: "nothing to pay", amount: amt }); continue; }
+    if (!s.bank_account || !s.ifsc) { skipped.push({ name: s.name, reason: "bank details missing", amount: amt }); continue; }
     const acct = s.bank_account.replace(/\s/g, "");
     const ifsc = s.ifsc.replace(/\s/g, "").toUpperCase();
     const within = ifsc.startsWith("HDFC");
@@ -57,7 +57,8 @@ export function hdfcCsv(run: RunRow, lines: LineRow[]) {
       "", "", "", "", "", "", "", "", date, "", ifsc, "", "", s.bank_advice_email || s.email || "",
     ]);
   }
-  return { csv: toCsv(rows), count: rows.length - 1, skipped, filename: `HDFC ${monthLabel(run.month)} Salary Transfer Sheet.csv` };
+  const total = rows.slice(1).reduce((a, r) => a + Number(r[3]), 0);
+  return { csv: toCsv(rows), count: rows.length - 1, total, skipped, filename: `HDFC ${monthLabel(run.month)} Salary Transfer Sheet.csv` };
 }
 
 export const ORGZIT_HEADER = [
@@ -81,7 +82,8 @@ export function orgzitCsv(run: RunRow, lines: LineRow[], o: OrgzitSettings) {
     ]);
   }
   const fyMissing = !o.fy_ids?.[fy];
-  return { csv: toCsv(rows), count: rows.length - 1, missing, fyMissing, fy, filename: `Orgzit ${monthLabel(run.month)} Salary Upload.csv` };
+  const total = rows.slice(1).reduce((a, r) => a + Number(r[12]), 0);
+  return { csv: toCsv(rows), count: rows.length - 1, total, missing, fyMissing, fy, filename: `Orgzit ${monthLabel(run.month)} Salary Upload.csv` };
 }
 
 /** Full salary register – same columns as the Google Sheet salary tab, plus any custom formulas. */
@@ -90,7 +92,7 @@ export function registerCsv(run: RunRow, lines: LineRow[]) {
   const header = [
     "Print Code", "Employee Name", "Father's Name", "Employee #", "Employment Status", "Month-year", "UAN", "Title", "Location",
     "Date of Joining", "Working Days", "Paid Offs", "Leaves", "LOP Days", "Total Days", "Incentive (input)", "Arrears (input)", "Ex-Gratia",
-    "Manual Adjustment", "Professional Tax (input)", ...shown.map((f) => f.label), "Bank Account Number", "IFSC", "Email", "Remarks",
+    "Other addition ±", "Professional Tax (manual)", ...shown.map((f) => f.label), "Bank Account (last 4)", "IFSC", "Email", "Remarks",
   ];
   const rows: unknown[][] = [header];
   for (const l of lines) {
@@ -99,7 +101,7 @@ export function registerCsv(run: RunRow, lines: LineRow[]) {
       l.print_code, s.name, s.father_name, s.emp_code, s.status, monthLabel(run.month), s.uan, s.designation, s.location,
       s.date_of_joining, l.working_days, l.paid_offs, l.leaves, l.lop_days, Number(l.working_days) + Number(l.paid_offs) + Number(l.leaves),
       l.incentive, l.arrears, l.ex_gratia, l.manual_adjustment, l.professional_tax,
-      ...shown.map((f) => l.calc?.[f.key] ?? ""), s.bank_account, s.ifsc, s.email, l.error || l.remarks || "",
+      ...shown.map((f) => l.calc?.[f.key] ?? ""), s.bank_account ? `XXXX${s.bank_account.replace(/\s/g, "").slice(-4)}` : "", s.ifsc, s.email, l.error || l.remarks || "",
     ]);
   }
   return { csv: toCsv(rows), filename: `Spans ${monthLabel(run.month)} Salary Register.csv` };

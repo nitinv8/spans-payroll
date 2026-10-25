@@ -10,6 +10,6 @@ export default function Flash() {
   if (error) return <div className="notice bad"><b>Couldn&apos;t do that:</b> {error}</div>;
   if (deleted) return <div className="notice ok">Employee deleted.</div>;
   if (saved) return <div className="notice ok">Saved.</div>;
-  if (refreshed) return <div className="notice ok">Re-calculated with the latest formulas, employee details and salary structures.</div>;
+  if (refreshed) return <div className="notice ok">Re-calculated. Days and amounts you entered were kept.</div>;
   return null;
 }

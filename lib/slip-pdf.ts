@@ -41,7 +41,10 @@ const dmy = (iso: string | null | undefined) => {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-");
 };
 
-function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company, month: string, formulas: FormulaRow[], l: LineRow, draft = false) {
+export type SlipMode = "final" | "provisional" | "candidate";
+
+function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company, month: string, formulas: FormulaRow[], l: LineRow, mode: SlipMode = "final") {
+  const draft = mode === "candidate";
   const { width, height } = page.getSize();
   if (draft) {
     page.drawText("DRAFT", { x: 120, y: 260, size: 130, font: bold, color: rgb(0.88, 0.9, 0.93), rotate: degrees(35) });
@@ -60,6 +63,7 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   text([company.pan && `PAN: ${company.pan}`, company.cin && `CIN: ${company.cin}`].filter(Boolean).join("     "), M, y, 8.5, font, muted);
   right(draft ? "DRAFT SALARY BREAK-UP" : "SALARY SLIP", width - M, height - M, 11, bold);
   right(draft ? "Proposed monthly salary" : monthLabel(month), width - M, height - M - 14, 10);
+  if (mode === "provisional") right("PROVISIONAL - month not finalized", width - M, height - M - 28, 8.5, bold);
   y -= 12; hr(y); y -= 20;
 
   // Employee block
@@ -151,7 +155,7 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   for (const n of notes) { text(n, M, y, 8.5, font, muted); y -= 11; }
 }
 
-export async function buildSlipsPdf(company: Company, month: string, formulas: FormulaRow[], lines: LineRow[], draft = false) {
+export async function buildSlipsPdf(company: Company, month: string, formulas: FormulaRow[], lines: LineRow[], mode: SlipMode = "final") {
   const doc = await PDFDocument.create();
   doc.setTitle(`${company.name} – Salary Slips ${monthLabel(month)}`);
   doc.setAuthor(company.name);
@@ -159,7 +163,7 @@ export async function buildSlipsPdf(company: Company, month: string, formulas: F
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   for (const l of lines) {
     const page = doc.addPage([595.28, 841.89]); // A4
-    drawSlip(page, font, bold, company, month, formulas, l, draft);
+    drawSlip(page, font, bold, company, month, formulas, l, mode);
   }
   return doc.save();
 }

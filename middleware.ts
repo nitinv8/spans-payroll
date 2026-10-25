@@ -15,6 +15,19 @@ export async function middleware(request: NextRequest) {
   });
   const { data: { user } } = await supabase.auth.getUser();
   const isLogin = request.nextUrl.pathname.startsWith("/login");
+  // Two-step login: signed in with password only, but an authenticator app is set up → code still needed
+  let needsCode = false;
+  if (user) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    needsCode = aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2";
+  }
+  if (user && needsCode && !isLogin) {
+    if (request.nextUrl.pathname.startsWith("/api/")) return NextResponse.json({ error: "Two-step code needed" }, { status: 401 });
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
   if (!user && !isLogin) {
     if (request.nextUrl.pathname.startsWith("/api/")) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const url = request.nextUrl.clone();
@@ -22,7 +35,7 @@ export async function middleware(request: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
-  if (user && isLogin) {
+  if (user && isLogin && !needsCode) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

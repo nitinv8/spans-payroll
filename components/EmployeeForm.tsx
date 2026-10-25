@@ -1,4 +1,5 @@
 import { saveEmployee } from "@/app/actions";
+import SensitiveField, { mask } from "./SensitiveField";
 
 type E = Record<string, any>;
 const F = ({ name, label, e, type = "text", wide = false, list }: { name: string; label: string; e: E; type?: string; wide?: boolean; list?: string }) => (
@@ -50,12 +51,12 @@ export default function EmployeeForm({ e = {}, locations = [] }: { e?: E; locati
       <div className="panel">
         <h2>Bank & statutory</h2>
         <div className="fields">
-          <F name="bank_account" label="Bank account number" e={e} />
+          <SensitiveField name="bank_account" label="Bank account number" employeeId={e.id} masked={mask(e.bank_account)} />
           <F name="ifsc" label="IFSC" e={e} />
           <F name="bank_name" label="Bank name" e={e} />
           <F name="bank_advice_email" label="Email on HDFC bank file" e={e} type="email" />
-          <F name="pan" label="PAN" e={e} />
-          <F name="aadhaar" label="Aadhaar" e={e} />
+          <SensitiveField name="pan" label="PAN" employeeId={e.id} masked={mask(e.pan)} />
+          <SensitiveField name="aadhaar" label="Aadhaar" employeeId={e.id} masked={mask(e.aadhaar)} />
           <F name="uan" label="UAN (PF)" e={e} />
           <F name="esic_number" label="ESIC number" e={e} />
           <F name="epf_kyc" label="EPF KYC" e={e} />

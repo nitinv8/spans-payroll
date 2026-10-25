@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   ["/", "Dashboard"], ["/payroll", "Monthly payroll"], ["/employees", "Employees"], ["/incentives", "OT incentives"],
-  ["/bonus", "Bonus"], ["/settings/formulas", "Formulas"], ["/settings", "Settings"],
+  ["/bonus", "Bonus"], ["/settings/formulas", "Formulas"], ["/settings/audit", "Audit log"], ["/settings", "Settings"],
 ] as const;
 
 export default function Nav() {
