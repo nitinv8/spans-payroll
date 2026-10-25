@@ -50,7 +50,7 @@ export async function formulasFor(month: string): Promise<{ id: string | null; f
 const EMP_FIELDS = [
   "emp_code", "name", "father_name", "designation", "location", "status", "dob", "date_of_joining", "date_of_leaving", "mobile",
   "email", "bank_advice_email", "bank_account", "ifsc", "bank_name", "aadhaar", "pan", "uan", "esic_number", "blood_group",
-  "tshirt_size", "shoe_size", "tshirt_status", "id_card", "epf_kyc", "orgzit_description", "orgzit_id", "notes", "joining_letter_url",
+  "tshirt_size", "shoe_size", "tshirt_status", "id_card", "epf_kyc", "orgzit_description", "orgzit_id", "notes", "joining_letter_url", "state",
 ];
 
 export async function saveEmployee(form: FormData) {

@@ -114,16 +114,17 @@ export function complianceSummary(lines: LineRow[]) {
     if (l.includes("delhi")) return "Delhi";
     return loc || "Other";
   };
-  const by: Record<string, { state: string; heads: number; esi_wage: number; esi_emp: number; esi_er: number; pf_heads: number; pf_wage: number; pf_emp: number; pf_er: number; lwf_emp: number; lwf_er: number }> = {};
+  const by: Record<string, { state: string; heads: number; esi_wage: number; esi_emp: number; esi_er: number; pf_heads: number; pf_wage: number; pf_emp: number; pf_er: number; lwf_emp: number; lwf_er: number; pt: number; pt_heads: number }> = {};
   for (const l of lines) {
     const c = l.calc || {};
-    const k = state(l.snapshot.location);
-    const r = (by[k] ||= { state: k, heads: 0, esi_wage: 0, esi_emp: 0, esi_er: 0, pf_heads: 0, pf_wage: 0, pf_emp: 0, pf_er: 0, lwf_emp: 0, lwf_er: 0 });
+    const k = (l.snapshot as { state?: string | null }).state || state(l.snapshot.location);
+    const r = (by[k] ||= { state: k, heads: 0, esi_wage: 0, esi_emp: 0, esi_er: 0, pf_heads: 0, pf_wage: 0, pf_emp: 0, pf_er: 0, lwf_emp: 0, lwf_er: 0, pt: 0, pt_heads: 0 });
     if ((c.esi_employee || 0) > 0) { r.heads++; r.esi_wage += c.gross_ex_conveyance || 0; }
     r.esi_emp += c.esi_employee || 0; r.esi_er += c.esi_employer || 0;
     if ((c.pf_employee || 0) > 0) { r.pf_heads++; r.pf_wage += Math.min(c.pf_wage || 0, c.pf_wage_ceiling || 15000); }
     r.pf_emp += c.pf_employee || 0; r.pf_er += c.pf_employer || 0;
     r.lwf_emp += c.lwf_employee || 0; r.lwf_er += c.lwf_employer || 0;
+    if ((c.professional_tax || 0) > 0) { r.pt_heads++; r.pt += c.professional_tax || 0; }
   }
   return Object.values(by).sort((a, b) => a.state.localeCompare(b.state));
 }

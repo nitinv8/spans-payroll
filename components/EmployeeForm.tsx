@@ -22,6 +22,14 @@ export default function EmployeeForm({ e = {}, locations = [] }: { e?: E; locati
           <F name="designation" label="Title / position" e={e} />
           <F name="location" label="Location / site" e={e} list="locations" />
           <div>
+            <label htmlFor="state">State (for PT / LWF / ESIC)</label>
+            <select id="state" name="state" defaultValue={e.state ?? ""}>
+              <option value="">Work out from location</option>
+              <option>Haryana</option><option>Karnataka</option><option>Delhi</option>
+              <option>Uttar Pradesh</option><option>Maharashtra</option><option>Tamil Nadu</option><option>Other</option>
+            </select>
+          </div>
+          <div>
             <label htmlFor="status">Employment status</label>
             <select id="status" name="status" defaultValue={e.status || "Active"}>
               <option value="Active">Active</option><option value="Draft">Draft (offer / interview – not paid)</option><option value="Inactive">Inactive (left)</option>
