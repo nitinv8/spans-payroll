@@ -36,6 +36,11 @@ export default async function RunPage({ params }: { params: { id: string } }) {
   const fy = financialYear(run.month);
   const fyMissing = !(settings?.orgzit as { fy_ids?: Record<string, string> })?.fy_ids?.[fy];
   const comp = complianceSummary(lines);
+  const compTot = comp.reduce((a, c) => ({
+    heads: a.heads + c.heads, esi_wage: a.esi_wage + c.esi_wage, esi_emp: a.esi_emp + c.esi_emp, esi_er: a.esi_er + c.esi_er,
+    pf_heads: a.pf_heads + c.pf_heads, pf_wage: a.pf_wage + c.pf_wage, pf_emp: a.pf_emp + c.pf_emp, pf_er: a.pf_er + c.pf_er,
+    lwf_emp: a.lwf_emp + c.lwf_emp, lwf_er: a.lwf_er + c.lwf_er,
+  }), { heads: 0, esi_wage: 0, esi_emp: 0, esi_er: 0, pf_heads: 0, pf_wage: 0, pf_emp: 0, pf_er: 0, lwf_emp: 0, lwf_er: 0 });
   const tot = lines.reduce((a, l) => ({ gross: a.gross + (Number(l.gross) || 0), net: a.net + (Number(l.net_pay) || 0), ctc: a.ctc + (Number(l.ctc) || 0) }), { gross: 0, net: 0, ctc: 0 });
 
   return (
@@ -125,14 +130,22 @@ export default async function RunPage({ params }: { params: { id: string } }) {
         <div className="tablewrap">
           <table>
             <thead><tr><th>State</th><th className="num">ESI members</th><th className="num">ESI wages</th><th className="num">ESI employee</th><th className="num">ESI employer</th><th className="num">ESI total</th>
-              <th className="num">PF members</th><th className="num">EPF wages</th><th className="num">PF employee</th><th className="num">PF employer</th><th className="num">LWF emp + er</th></tr></thead>
+              <th className="num">PF members</th><th className="num">EPF wages</th><th className="num">PF employee</th><th className="num">PF employer</th><th className="num">PF total</th><th className="num">LWF emp + er</th></tr></thead>
             <tbody>
               {comp.map((c) => (
                 <tr key={c.state}><td>{c.state}</td><td className="num">{c.heads}</td><td className="num">{inr(c.esi_wage)}</td><td className="num">{inr(c.esi_emp)}</td>
                   <td className="num">{inr(c.esi_er)}</td><td className="num"><b>{inr(c.esi_emp + c.esi_er)}</b></td><td className="num">{c.pf_heads}</td>
-                  <td className="num">{inr(c.pf_wage)}</td><td className="num">{inr(c.pf_emp)}</td><td className="num">{inr(c.pf_er)}</td><td className="num">{inr(c.lwf_emp + c.lwf_er)}</td></tr>
+                  <td className="num">{inr(c.pf_wage)}</td><td className="num">{inr(c.pf_emp)}</td><td className="num">{inr(c.pf_er)}</td><td className="num"><b>{inr(c.pf_emp + c.pf_er)}</b></td><td className="num">{inr(c.lwf_emp + c.lwf_er)}</td></tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td><td className="num">{compTot.heads}</td><td className="num">{inr(compTot.esi_wage)}</td><td className="num">{inr(compTot.esi_emp)}</td>
+                <td className="num">{inr(compTot.esi_er)}</td><td className="num">{inr(compTot.esi_emp + compTot.esi_er)}</td><td className="num">{compTot.pf_heads}</td>
+                <td className="num">{inr(compTot.pf_wage)}</td><td className="num">{inr(compTot.pf_emp)}</td><td className="num">{inr(compTot.pf_er)}</td>
+                <td className="num">{inr(compTot.pf_emp + compTot.pf_er)}</td><td className="num">{inr(compTot.lwf_emp + compTot.lwf_er)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
