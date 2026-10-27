@@ -139,7 +139,7 @@ export const DEFAULT_FORMULAS: FormulaRow[] = [
   { key: "pf_employee_pct", label: "PF employee %", expr: "12%", category: "parameter" },
   { key: "pf_wage_ceiling", label: "EPF wage ceiling", expr: "25000", category: "parameter" },
   { key: "eps_pct", label: "EPS % (part of employer 12%)", expr: "8.33%", category: "parameter" },
-  { key: "eps_wage_ceiling", label: "EPS wage ceiling", expr: "15000", category: "parameter" },
+  { key: "eps_wage_ceiling", label: "EPS wage ceiling", expr: "25000", category: "parameter" },
   { key: "edli_pct", label: "EDLI %", expr: "0.5%", category: "parameter" },
   { key: "pf_admin_pct", label: "EPF admin charges %", expr: "0.5%", category: "parameter" },
   { key: "bonus_pct", label: "Annual bonus %", expr: "8.33%", category: "parameter" },

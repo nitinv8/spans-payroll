@@ -77,11 +77,16 @@ const joiner = oct("Emp 37", { working_days: 13, paid_offs: 2, lop_days: 15 }, "
 check("joiner half gross", joiner.gross, 16781 / 2, 0.01);
 check("joiner pay > 0", joiner.net_pay > 0 ? 1 : 0, 1, 0);
 check("LOP > days clamps to 0", oct("Emp 37", { lop_days: 40 }).gross, 0, 0);
-// PF at ₹25,000 ceiling: all-basic ₹16,781 operator → 12% = 2014; employer = EPS 1250 + EPF 764 + EDLI 84 + admin 84
+// PF and EPS at ₹25,000 ceiling: all-basic ₹16,781 operator → 12% = 2014; employer = EPS 1398 + EPF 616 + EDLI 84 + admin 84
 const op = oct("Emp 37");
 check("PF ee 25k ceiling", op.pf_employee, 2014, 0);
-check("EPS capped at 15k", op.eps, 1250, 0);
-check("PF er total", op.pf_employer, 1250 + 764 + 84 + 84, 0);
+check("EPS on full 16,781", op.eps, 1398, 0);
+check("PF er total", op.pf_employer, 1398 + 616 + 84 + 84, 0);
+// Above the ceiling (basic 30,000): EPS 2083 + EPF 917 + EDLI 125 + admin 125 = 3250
+const hi = oct("Emp 37", {}, "2026-10-01", undefined, { basic: 30000 });
+check("EPS capped at 25k", hi.eps, 2083, 0);
+check("EPF er at 25k", hi.epf_employer, 917, 0);
+check("PF er at 25k = 3250", hi.pf_employer, 3250, 0);
 // Old-ceiling equivalence: wage 15,000 gives the familiar 1800 / 1950
 check("PF er at 15k = 1950", oct("Emp 37", {}, "2026-10-01", undefined, { basic: 15000 }).pf_employer, 1950, 0);
 // Karnataka PT: Mukund (33,200 gross) 200; 300 in Feb; Khem (22,951) nil

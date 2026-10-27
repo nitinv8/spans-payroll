@@ -1,34 +1,36 @@
-// Draft salary break-up for a prospective / draft employee, computed from their latest salary structure
-// with the formulas in force for the current month and a full month of attendance. Nothing is saved.
+// Salary break-up PDF for one salary revision (default: the latest), with the formulas in force in the month it is
+// first paid and a full month of attendance. Draft employees get the "Proposed salary" version for candidates;
+// everyone else gets a "Salary preview" for checking a revision. Nothing is saved.
 import { apiDb, download } from "@/lib/api";
-import { buildSlipsPdf, type Company } from "@/lib/slip-pdf";
-import { DEFAULT_FORMULAS, daysInMonth, monthEnd, thisMonthIST, type FormulaRow } from "@/lib/payroll";
-import { computeLine, snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
-import type { LineRow } from "@/lib/exports";
+import { buildBreakupPdf, type Company } from "@/lib/slip-pdf";
+import { DEFAULT_FORMULAS, thisMonthIST } from "@/lib/payroll";
+import { formulasForMonth, previewMonth, salaryBreakup } from "@/lib/breakup";
+import { snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
   const g = await apiDb();
   if ("error" in g) return g.error;
-  const { data: e } = await g.sb.from("employees").select("*").eq("id", params.id).single();
+  const structureId = new URL(req.url).searchParams.get("structure");
+  const [{ data: e }, { data: structs }, { data: sets }, { data: company }] = await Promise.all([
+    g.sb.from("employees").select("*").eq("id", params.id).single(),
+    g.sb.from("salary_structures").select("*").eq("employee_id", params.id).order("effective_from", { ascending: false }),
+    g.sb.from("formula_sets").select("effective_from, formulas"),
+    g.sb.from("company_settings").select("*").eq("id", 1).single(),
+  ]);
   if (!e) return new Response("Employee not found", { status: 404 });
-  const { data: structs } = await g.sb.from("salary_structures").select("*").eq("employee_id", e.id).order("effective_from", { ascending: false }).limit(1);
-  const s = structs?.[0] as Structure | undefined;
+  const s = (structureId ? structs?.find((x) => x.id === structureId) : structs?.[0]) as Structure | undefined;
   if (!s) return new Response("Add a salary structure for this person first (Salary history tab).", { status: 400 });
 
-  const month = thisMonthIST();
-  const { data: sets } = await g.sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(month)).order("effective_from", { ascending: false }).limit(1);
-  const formulas = (sets?.[0]?.formulas as FormulaRow[]) || DEFAULT_FORMULAS;
+  const month = previewMonth(s.effective_from, thisMonthIST());
+  const formulas = formulasForMonth(sets, month, DEFAULT_FORMULAS);
+  const b = salaryBreakup(formulas, month, snapshotOf(e as Employee), structureValues(s));
+  if (b.error) return new Response(b.error, { status: 400 });
 
-  const dim = daysInMonth(month);
-  const inputs = { working_days: dim, paid_offs: 0, leaves: 0, lop_days: 0, incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 };
-  const snap = snapshotOf(e as Employee);
-  const r = computeLine(formulas, month, snap, structureValues(s), inputs);
-  if (r.error) return new Response(r.error, { status: 400 });
-  const line = { id: "draft", print_code: null, snapshot: snap, ...inputs, ...r, calc: r.calc as Record<string, number>, remarks: null } as LineRow;
-
-  const { data: company } = await g.sb.from("company_settings").select("*").eq("id", 1).single();
-  const pdf = await buildSlipsPdf(company as Company, month, formulas, [line], "candidate");
-  return download(Buffer.from(pdf), `Spans Draft Salary Break-up - ${e.name.replace(/[^\w .-]/g, "")}.pdf`, "application/pdf");
+  const candidate = e.status === "Draft";
+  const pdf = await buildBreakupPdf(company as Company, b,
+    { name: e.name, designation: e.designation, location: e.location, effectiveFrom: s.effective_from }, candidate ? "candidate" : "preview");
+  const who = e.name.replace(/[^\w .-]/g, "");
+  return download(Buffer.from(pdf), candidate ? `Spans Proposed Salary - ${who}.pdf` : `Spans Salary Preview - ${who} - from ${s.effective_from}.pdf`, "application/pdf");
 }

@@ -84,6 +84,11 @@ export default async function RunPage({ params }: { params: { id: string } }) {
               <ConfirmButton className="btn primary" message="Finalize and lock this month? Figures will be frozen; you can reopen later if needed.">Finalize &amp; lock</ConfirmButton>
             </form>
           )}
+          {!locked && (
+            <form action={deleteRun}><input type="hidden" name="run_id" value={run.id} />
+              <ConfirmButton className="btn danger" message={`Delete the whole ${monthLabel(run.month)} payroll, including all days and amounts entered? This can't be undone.`}>Delete month</ConfirmButton>
+            </form>
+          )}
           {locked && (
             <form action={reopenRun}><input type="hidden" name="run_id" value={run.id} />
               <ConfirmButton message={"Reopen this month for editing?\n\nThe reopen is recorded in the audit log. Bank and Orgzit files can't be downloaded again until you finalize. If the HDFC file was already uploaded, don't upload a second one."}>Reopen</ConfirmButton>
@@ -190,9 +195,6 @@ export default async function RunPage({ params }: { params: { id: string } }) {
               <button className="btn">Add</button>
             </form>
           )}
-          <form action={deleteRun} style={{ marginLeft: "auto" }}><input type="hidden" name="run_id" value={run.id} />
-            <ConfirmButton className="btn danger" message="Delete this whole payroll month?">Delete month</ConfirmButton>
-          </form>
         </div>
       )}
 

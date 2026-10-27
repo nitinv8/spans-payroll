@@ -94,10 +94,11 @@ export async function saveStructure(form: FormData) {
     extras, remarks: str(form, "remarks"),
   };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(row.effective_from)) fail("Effective from date is required");
-  const { error } = await sb.from("salary_structures").upsert(row, { onConflict: "employee_id,effective_from" });
+  const { data: saved, error } = await sb.from("salary_structures").upsert(row, { onConflict: "employee_id,effective_from" }).select("id").single();
   if (error) fail(error.message);
   revalidatePath(`/employees/${employee_id}`);
-  redirect(`/employees/${employee_id}?tab=salary&saved=1`);
+  // Show the calculation for the revision just saved
+  redirect(`/employees/${employee_id}?tab=salary&saved=1&preview=${saved?.id ?? ""}#preview`);
 }
 
 /** Returns one sensitive field in full and records who looked at it. */

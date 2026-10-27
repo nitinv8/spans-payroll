@@ -2,6 +2,7 @@
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
 import { monthLabel, todayIST, type FormulaRow } from "./payroll";
 import type { LineRow } from "./exports";
+import { friendlyLabel, type Breakup } from "./breakup";
 
 export type Company = { name: string; address: string | null; pan: string | null; cin: string | null; slip_notes: string | null };
 
@@ -168,5 +169,106 @@ export async function buildSlipsPdf(company: Company, month: string, formulas: F
   return doc.save();
 }
 
-export const slipFilename = (month: string, name?: string) =>
+export type BreakupInfo = { name: string; designation?: string | null; location?: string | null; effectiveFrom?: string | null };
+
+/**
+ * One-page salary break-up: monthly and yearly, earnings → deductions → in-hand → company contributions → CTC.
+ * "candidate" = proposed salary for someone who hasn't joined; "preview" = checking a revision for an employee.
+ */
+export async function buildBreakupPdf(company: Company, b: Breakup, info: BreakupInfo, mode: "candidate" | "preview") {
+  const doc = await PDFDocument.create();
+  const candidate = mode === "candidate";
+  doc.setTitle(`${company.name} – ${candidate ? "Proposed salary" : "Salary preview"} – ${info.name}`);
+  doc.setAuthor(company.name);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const page = doc.addPage([595.28, 841.89]);
+  const { width, height } = page.getSize();
+  const M = 56;
+  const ink = rgb(0.1, 0.12, 0.15), muted = rgb(0.42, 0.45, 0.5), rule = rgb(0.85, 0.87, 0.9), brand = rgb(0.11, 0.33, 0.45), soft = rgb(0.95, 0.96, 0.98);
+  page.drawText(candidate ? "DRAFT" : "PREVIEW", { x: 150, y: 300, size: 110, font: bold, color: rgb(0.94, 0.95, 0.97), rotate: degrees(35) });
+
+  const text = (t: string, x: number, y: number, size = 10, f = font, color = ink) => page.drawText(safe(t), { x, y, size, font: f, color });
+  const right = (t: string, xr: number, y: number, size = 10, f = font, color = ink) =>
+    text(t, xr - f.widthOfTextAtSize(safe(t), size), y, size, f, color);
+  const money = (n: number) => fmt(n);
+
+  // Header
+  let y = height - M;
+  text(company.name, M, y, 14, bold);
+  right(candidate ? "Proposed Salary" : "Salary Preview", width - M, y, 14, bold, brand);
+  y -= 14;
+  if (company.address) text(company.address, M, y, 8, font, muted);
+  right(`Prepared on ${dmy(todayIST())}`, width - M, y, 8, font, muted);
+  y -= 22;
+  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.8, color: rule });
+  y -= 26;
+
+  // Who
+  text(info.name, M, y, 16, bold); y -= 16;
+  text([info.designation, info.location].filter(Boolean).join("  ·  "), M, y, 10, font, muted); y -= 14;
+  const basis = candidate
+    ? `Monthly figures are for a full month. Yearly figures add up 12 months from ${monthLabel(b.month)}.`
+    : `Revision effective ${dmy(info.effectiveFrom)}. Full month of ${monthLabel(b.month)}; yearly = 12 months from then.`;
+  text(basis, M, y, 8.5, font, muted);
+  y -= 30;
+
+  // Table
+  const C1 = width - M - 110, C2 = width - M; // right edges of the two amount columns
+  right("Per month", C1, y, 8.5, bold, muted); right("Per year", C2, y, 8.5, bold, muted);
+  y -= 8;
+  const section = (title: string) => {
+    y -= 14; text(title.toUpperCase(), M, y, 8.5, bold, brand); y -= 6;
+    page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.6, color: rule }); y -= 15;
+  };
+  const line = (label: string, m: number, a: number) => {
+    text(label, M + 4, y, 10); right(money(m), C1, y); right(money(a), C2, y, 10, font, muted); y -= 17;
+  };
+  const total = (label: string, m: number, a: number, fill = false) => {
+    if (fill) page.drawRectangle({ x: M, y: y - 6, width: width - 2 * M, height: 21, color: soft });
+    else page.drawLine({ start: { x: M, y: y + 12 }, end: { x: width - M, y: y + 12 }, thickness: 0.6, color: rule });
+    text(label, M + 4, y, 10.5, bold); right(money(m), C1, y, 10.5, bold); right(money(a), C2, y, 10.5, bold); y -= 22;
+  };
+
+  section("Salary");
+  for (const r of b.earnings) line(friendlyLabel(r), r.monthly, r.annual);
+  total("Gross salary", b.gross.monthly, b.gross.annual);
+
+  if (b.deductions.length) {
+    section("Deducted from salary");
+    for (const r of b.deductions) line(friendlyLabel(r), r.monthly, r.annual);
+    total("Total deductions", b.deductionsTotal.monthly, b.deductionsTotal.annual);
+  }
+
+  // In hand
+  y -= 8;
+  page.drawRectangle({ x: M, y: y - 16, width: width - 2 * M, height: 38, color: brand });
+  const white = rgb(1, 1, 1);
+  text(candidate ? "In-hand salary (estimated)" : "In-hand salary", M + 12, y + 2, 12, bold, white);
+  text(rupeesInWords(b.net.monthly) + " per month", M + 12, y - 10, 7.5, font, rgb(0.85, 0.92, 0.96));
+  right(`Rs. ${money(b.net.monthly)}`, C1, y - 2, 12, bold, white);
+  right(`Rs. ${money(b.net.annual)}`, C2, y - 2, 12, bold, white);
+  y -= 40;
+
+  if (b.employer.length) {
+    section("Paid by the company on top of salary");
+    for (const r of b.employer) line(friendlyLabel(r), r.monthly, r.annual);
+  }
+  y -= 4;
+  total("Cost to company (CTC)", b.ctc.monthly, b.ctc.annual, true);
+
+  // Notes
+  y -= 16;
+  const notes = candidate
+    ? ["This is a proposed salary break-up for discussion. It is not a payslip or an offer of employment.",
+       "Actual pay depends on attendance and the statutory rates in force each month.",
+       ...(b.employer.some((r) => r.key === "bonus" || r.key === "gratuity") ? ["Bonus and gratuity are set aside by the company each month and paid as per rules, not with salary."] : [])]
+    : ["Preview for checking a salary revision. It is not a payslip.",
+       "The monthly payroll applies attendance, overtime and other inputs on top of these figures."];
+  for (const n of notes) { text(n, M, y, 8, font, muted); y -= 11; }
+
+  return doc.save();
+}
+
+export const slipFilename =(month: string, name?: string) =>
   name ? `Spans ${monthLabel(month)} Salary Slip - ${name.replace(/[^\w .-]/g, "")}.pdf` : `Spans ${monthLabel(month)} Salary Slips.pdf`;

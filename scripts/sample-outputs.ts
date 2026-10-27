@@ -38,5 +38,5 @@ console.log("Orgzit rows", o.count);
 console.table(complianceSummary(lines));
 const company = { name: "Spans Envirotech Pvt. Ltd.", address: "405-406, Woodbury Towers, Charmwood Village, Surajkund Road, Faridabad-121009",
   pan: "AAACS9538A", cin: "U74899DL1993PTC052932",
-  slip_notes: "Salary will be transferred to your bank account by 7th of the month.\nThis is computer generated and does not need signature." };
+  slip_notes: "This is computer generated and does not need signature." };
 buildSlipsPdf(company, month, SHEET_FORMULAS_FY26, lines).then((b) => { writeFileSync(`${out}/slips.pdf`, b); console.log("PDF pages", lines.length); });

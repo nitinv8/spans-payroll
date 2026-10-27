@@ -5,8 +5,10 @@ import ConfirmButton from "@/components/Confirm";
 import SendSlip from "@/components/SendSlip";
 import { waNumber } from "@/lib/contact";
 import { pageDb, fmtDate } from "@/lib/data";
-import { inr, monthLabel, monthEnd, thisMonthIST, DEFAULT_FORMULAS, type FormulaRow } from "@/lib/payroll";
-import { computeLine, snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
+import { inr, monthLabel, thisMonthIST, DEFAULT_FORMULAS } from "@/lib/payroll";
+import { snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
+import { formulasForMonth, previewMonth, salaryBreakup } from "@/lib/breakup";
+import BreakupTable from "@/components/BreakupTable";
 import { saveStructure, deleteStructure, deleteEmployee } from "@/app/actions";
 
 const COMPONENTS = [
@@ -18,7 +20,7 @@ const FLAGS = [
   ["gratuity_applicable", "Gratuity"], ["pt_applicable", "Professional tax"],
 ] as const;
 
-export default async function EmployeePage({ params, searchParams }: { params: { id: string }; searchParams: { tab?: string; from?: string } }) {
+export default async function EmployeePage({ params, searchParams }: { params: { id: string }; searchParams: { tab?: string; from?: string; preview?: string; saved?: string } }) {
   const { sb } = await pageDb();
   const tab = searchParams.tab || "details";
   // Everything this page needs, fetched in parallel
@@ -30,20 +32,26 @@ export default async function EmployeePage({ params, searchParams }: { params: {
       ? sb.from("payroll_lines").select("id, run_id, gross, net_pay, ctc, incentive, manual_adjustment, working_days, paid_offs, leaves, lop_days, payroll_runs(month, status)").eq("employee_id", params.id)
       : Promise.resolve({ data: null }),
     sb.from("payroll_lines").select("id", { count: "exact", head: true }).eq("employee_id", params.id),
-    sb.from("formula_sets").select("formulas").lte("effective_from", monthEnd(thisMonthIST())).order("effective_from", { ascending: false }).limit(1),
+    sb.from("formula_sets").select("effective_from, formulas"),
   ]);
   if (!e) notFound();
   const locations = Array.from(new Set((all || []).map((x) => x.location).filter(Boolean))) as string[];
   const sortedLines = ((lines || []) as any[]).sort((a, b) => (a.payroll_runs.month < b.payroll_runs.month ? 1 : -1));
   const latest = structs?.[0];
-  // Estimated in-hand for the draft message (same calculation as the draft slip)
-  let draftNet: number | null = null;
-  if (e.status === "Draft" && latest) {
-    const m = thisMonthIST();
-    const r = computeLine((sets?.[0]?.formulas as FormulaRow[]) || DEFAULT_FORMULAS, m, snapshotOf(e as Employee), structureValues(latest as Structure),
-      { working_days: 30, paid_offs: 0, leaves: 0, lop_days: 0, incentive: 0, arrears: 0, ex_gratia: 0, manual_adjustment: 0, professional_tax: 0 });
-    draftNet = r.net_pay;
-  }
+  // Salary break-up (same calculation as the break-up PDF): full month, formulas in force when the revision is first paid
+  const breakupOf = (s: any) => {
+    const m = previewMonth(s.effective_from, thisMonthIST());
+    return salaryBreakup(formulasForMonth(sets, m, DEFAULT_FORMULAS), m, snapshotOf(e as Employee), structureValues(s as Structure));
+  };
+  const draft = e.status === "Draft" && latest ? breakupOf(latest) : null;
+  const draftNet = draft && !draft.error ? draft.net.monthly : null;
+  const pIdx = tab === "salary" && searchParams.preview ? (structs || []).findIndex((s) => s.id === searchParams.preview) : -1;
+  const pStruct = pIdx >= 0 ? structs![pIdx] : null;
+  const pPrev = pIdx >= 0 ? structs![pIdx + 1] : null;
+  const preview = pStruct ? breakupOf(pStruct) : null;
+  // compare with the previous revision using the same month and formulas
+  const previewPrev = pStruct && pPrev ? salaryBreakup(formulasForMonth(sets, preview!.month, DEFAULT_FORMULAS), preview!.month,
+    snapshotOf(e as Employee), structureValues(pPrev as Structure)) : null;
   const base = searchParams.from ? structs?.find((s) => s.id === searchParams.from) : latest;
   const gross = (s: any) => COMPONENTS.reduce((a, [k]) => a + Number(s[k] || 0), 0);
   const nextMonth = (() => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + 1, 1); return d.toISOString().slice(0, 10); })();
@@ -72,15 +80,28 @@ export default async function EmployeePage({ params, searchParams }: { params: {
         <div className="panel" style={{ borderColor: "#f1d9a5", background: "#fffbf2" }}>
           <h2 style={{ marginBottom: 6 }}>Draft employee: not included in payroll</h2>
           <p className="muted" style={{ marginTop: 0 }}>
-            Use this to share a proposed salary break-up with a candidate or new joiner. When they join, set <b>Employment status</b> to Active and fill in the date of joining.
+            Share the proposed salary with the candidate. When they join, set <b>Employment status</b> to Active and fill in the date of joining.
           </p>
-          {latest ? (
-            <div className="row">
-              <a className="btn primary" href={`/api/employees/${e.id}/draft-slip`}>Download draft salary slip</a>
-              {draftNet != null && <span className="muted">Estimated in-hand: <b>₹{inr(draftNet)}</b>/month</span>}
-              <SendSlip url={`/api/employees/${e.id}/draft-slip`} draft name={e.name} month={thisMonthIST()}
-                netPay={draftNet} contact={{ email: e.email, mobile: e.mobile }} />
-            </div>
+          {latest && draft ? (
+            <>
+              {!draft.error && (
+                <div className="stats" style={{ marginBottom: 12 }}>
+                  <div className="stat"><b>₹{inr(draft.gross.monthly)}</b><span>Gross salary / month</span></div>
+                  <div className="stat"><b>₹{inr(draft.deductionsTotal.monthly)}</b><span>Deductions / month</span></div>
+                  <div className="stat" style={{ borderColor: "var(--brand)" }}><b>₹{inr(draft.net.monthly)}</b><span>In-hand / month</span></div>
+                  <div className="stat"><b>₹{inr(draft.ctc.annual)}</b><span>Cost to company / year</span></div>
+                </div>
+              )}
+              <div className="row">
+                <a className="btn primary" href={`/api/employees/${e.id}/draft-slip`}>Download proposed salary (PDF)</a>
+                <SendSlip url={`/api/employees/${e.id}/draft-slip`} draft name={e.name} month={thisMonthIST()}
+                  netPay={draftNet} contact={{ email: e.email, mobile: e.mobile }} />
+              </div>
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ cursor: "pointer" }}>See the full break-up</summary>
+                <div style={{ marginTop: 8 }}><BreakupTable b={draft} /></div>
+              </details>
+            </>
           ) : (
             <p style={{ margin: 0 }}><Link href="?tab=salary">Add a salary structure</Link> first to generate the draft slip.</p>
           )}
@@ -134,7 +155,8 @@ export default async function EmployeePage({ params, searchParams }: { params: {
                         <td className="small">{FLAGS.filter(([k]) => s[k]).map(([, l]) => l).join(", ") || "–"}</td>
                         <td className="mono small">{Object.entries(s.extras || {}).map(([k, v]) => `${k}=${v}`).join(", ")}</td>
                         <td className="small">{s.remarks}</td>
-                        <td className="row">
+                        <td className="row" style={{ flexWrap: "nowrap" }}>
+                          <Link className={`btn sm${s.id === pStruct?.id ? " primary" : ""}`} href={`?tab=salary&preview=${s.id}#preview`}>Preview</Link>
                           <Link className="btn sm" href={`?tab=salary&from=${s.id}#revise`}>Copy</Link>
                           <form action={deleteStructure}>
                             <input type="hidden" name="id" value={s.id} /><input type="hidden" name="employee_id" value={e.id} />
@@ -148,6 +170,28 @@ export default async function EmployeePage({ params, searchParams }: { params: {
               </div>
             )}
           </div>
+          {pStruct && preview && (
+            <div className="panel" id="preview">
+              <div className="pagehead" style={{ marginBottom: 6 }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>{searchParams.saved ? "Saved. " : ""}Salary from {fmtDate(pStruct.effective_from)}</h2>
+                  <div className="muted small">
+                    Full month of {monthLabel(preview.month)}, no LOP, overtime or adjustments
+                    {pPrev ? <> · compared with the {fmtDate(pPrev.effective_from)} revision</> : null}.
+                  </div>
+                </div>
+                <div className="row">
+                  <a className="btn primary" href={`/api/employees/${e.id}/draft-slip?structure=${pStruct.id}`}>Download preview (PDF)</a>
+                  <Link className="btn" href="?tab=salary">Close</Link>
+                </div>
+              </div>
+              <BreakupTable b={preview} prev={previewPrev} showHow />
+              <p className="muted small" style={{ marginBottom: 0 }}>
+                Already started a payroll month that should use this revision? Open the month and click <b>Re-calculate</b> with
+                “Use current salary structures” ticked; days and amounts already entered are kept.
+              </p>
+            </div>
+          )}
           <form action={saveStructure} className="panel" id="revise">
             <h2>{structs?.length ? "Add a revision" : "Add salary structure"}</h2>
             <p className="muted small" style={{ marginTop: -4 }}>

@@ -94,7 +94,7 @@ The 4.81% accrual understates the real liability.
 - **Draft candidates' data retention:** purge Draft records N days after creation if they don't join (DPDP).
 - **Employee privacy notice** (one page; DPDP s.7 legitimate use still needs notice and safeguards).
 - **Supabase settings to confirm:** sign-ups off, backups / point-in-time recovery on.
-- **EPS under the ₹25,000 EPF ceiling:** EPS is still capped at ₹15,000 wages pending an EPFO circular. Also confirm whether September 2026 should use ₹15,000 or ₹25,000. September is finalized at ₹15,000.
+- **September 2026 split month (EPF/EPS):** EPFO FAQs say 1–16 Sep uses the ₹15,000 ceiling and 17–30 Sep the ₹25,000 ceiling, in one ECR. September was finalized at ₹15,000 for the whole month (9 PF members, all above ₹15,000 PF wages). Decide with the CA whether to post the difference; the FAQs allow the employee share to be recovered in a later payroll. EPS is now on wages up to ₹25,000 from October (25 Oct 2026 decision).
 - **EDLI wage ceiling:** set equal to the EPF ceiling (₹25,000); confirm.
 - **ESIC wage treatment** of conveyance and HRA under the Code on Social Security: confirm.
 - **Haryana LWF coverage:** confirm exclusions (managerial staff); LWF was switched on for all Haryana and Karnataka staff. Also confirm Jan–Apr 2026 arrears at ₹35/₹70, the current Karnataka LWF rate (₹50/₹100 assumed), and whether Delhi LWF applies.
