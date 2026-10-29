@@ -25,7 +25,7 @@ h3 { font-size: 14px; margin: 0 0 8px; }
 .side nav a.active { background: rgba(255,255,255,.13); color: #fff; }
 .side .foot { margin-top: auto; font-size: 12px; padding: 0 10px; color: #8fb0c2; }
 .side .foot button { margin-top: 8px; }
-main { padding: 24px 28px 60px; max-width: 1400px; width: 100%; }
+main { padding: 24px 28px 60px; max-width: 1400px; width: 100%; min-width: 0; }
 .pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
 
 /* Panels */
@@ -129,3 +129,17 @@ td.menu-cell { width: 36px; padding: 4px 2px 4px 8px; }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 .recalc { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 8px; }
 .recalc .btn { align-self: flex-start; margin-top: 4px; }
+
+/* Attendance grid */
+.attgrid { border-collapse: separate; border-spacing: 0; }
+.attgrid th, .attgrid td { padding: 4px 0; text-align: center; min-width: 26px; font-size: 12px; border-bottom: 1px solid var(--soft); }
+.attgrid th.name, .attgrid td.name { text-align: left; padding: 4px 10px 4px 0; min-width: 150px; position: sticky; left: 0; background: #fff; z-index: 1; }
+.attgrid td.sun, .attgrid th.sun { background: #f3f4f6; }
+.attgrid a.c { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; font-weight: 700; font-size: 11px; text-decoration: none; }
+.attgrid a.c.on { background: #e3f3ea; color: var(--ok); }
+.attgrid a.c.away { background: #fdf0d9; color: var(--warn); }
+.attgrid a.c.hr { background: #e6eef8; color: var(--brand); }
+.attgrid a.c.miss { color: #c3c8cf; }
+.attgrid a.c.sel { outline: 2px solid var(--focus); }
+.selfie { width: 140px; height: 186px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); }
+.attgrid th.num, .attgrid td.num { padding: 4px 8px; min-width: 0; white-space: nowrap; }

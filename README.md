@@ -68,6 +68,31 @@ npm test                     # payroll engine vs the Google Sheet (needs data/sh
 Salary change: Employees → person → **Salary history** → *Add a revision* with the effective month.
 Statutory rate change (for example the PF wage ceiling): **Formulas** → *New version* → set "Applies from" → edit the parameter → Save.
 
+## Staff app (employees' phones)
+
+Employees open `https://<your-app>/my` on their phone and can add it to the home screen. It covers:
+- **Today:** check in / check out with a selfie and GPS location, checked against your sites.
+- **Attendance:** their own month.
+- **Payslips:** finalized months only, as PDF to download or share.
+- **Salary:** monthly break-up, CTC, PF & ESI so far this year, salary history.
+- **Me:** their details, with the bank account shown as last 4 digits only.
+
+**How it's kept separate.**
+- Employees sign in with mobile number + a 6-digit PIN that HR sets on the employee page (**Staff app access**).
+- Each employee has their own Supabase login. The database only ever gives them their own records, through the `my_*` functions in migration 007; they can't read any table directly.
+- Employee logins can't open HR pages (`middleware.ts`).
+- 5 wrong PINs lock that mobile for 15 minutes.
+- Selfies sit in a private storage bucket and are deleted after 90 days, whenever HR opens the Attendance page.
+
+**One-time setup (Vercel → Project → Settings → Environment Variables, then redeploy):**
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase → Project Settings → API Keys → the secret / service_role key. Used only on the server, to create staff logins.
+- `EMPLOYEE_PIN_PEPPER` (optional, recommended): any long random text. If you set it later, every PIN must be set again.
+
+**HR side:**
+- **Attendance:** a month grid per person, plus a day view with selfies, map links and HR marks (a reason is required).
+- **Attendance → Sites:** add a site with a Google Maps link or your current location, and set its radius.
+- **Payroll month → Fill days from attendance:** suggests worked / offs / leave / LOP for each person; you tick who to update.
+
 ## Use it from Claude (MCP connector)
 
 The app has an MCP server at `https://<your-app>/api/mcp`. With it, Claude can list and change employees and salary revisions, run a month (start, attendance, recalculate, finalize), handle OT and bonus, and edit formulas. It uses the same rules as the web app (`lib/ops.ts`).

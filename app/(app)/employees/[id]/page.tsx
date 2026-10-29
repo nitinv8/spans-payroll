@@ -9,7 +9,8 @@ import { inr, monthLabel, thisMonthIST, DEFAULT_FORMULAS } from "@/lib/payroll";
 import { snapshotOf, structureValues, type Employee, type Structure } from "@/lib/run-logic";
 import { formulasForMonth, previewMonth, salaryBreakup } from "@/lib/breakup";
 import BreakupTable from "@/components/BreakupTable";
-import { saveStructure, deleteStructure, deleteEmployee } from "@/app/actions";
+import { saveStructure, deleteStructure, deleteEmployee, disableEmployeeApp } from "@/app/actions";
+import AppAccess from "@/components/AppAccess";
 
 const COMPONENTS = [
   ["basic", "Basic"], ["hra", "HRA"], ["medical", "Medical"], ["conveyance", "Conveyance"], ["mobile", "Mobile"],
@@ -116,6 +117,22 @@ export default async function EmployeePage({ params, searchParams }: { params: {
       {tab === "details" && (
         <>
           <EmployeeForm e={e} locations={locations} />
+          {e.status !== "Draft" && (
+            <div className="panel" id="app-access" style={{ marginTop: 24 }}>
+              <h2>Staff app access {e.app_access ? <span className="badge ok">on</span> : <span className="badge">off</span>}</h2>
+              <p className="muted small" style={{ marginTop: -4 }}>
+                The staff app (<span className="mono">/my</span> on their phone) is for attendance with selfie and location, payslips, salary and PF/ESI.
+                They sign in with their mobile number and a 6-digit PIN. If their mobile number changes, set a new PIN.
+              </p>
+              <AppAccess employeeId={e.id} name={e.name} mobile={e.mobile} enabled={!!e.app_access} />
+              {e.app_access && (
+                <form action={disableEmployeeApp} style={{ marginTop: 12 }}>
+                  <input type="hidden" name="id" value={e.id} />
+                  <ConfirmButton className="btn sm danger" message={`Turn off app access for ${e.name}? They'll be signed out on their phone.`}>Turn off access</ConfirmButton>
+                </form>
+              )}
+            </div>
+          )}
           <div className="panel" style={{ marginTop: 24 }}>
             <h2>Remove employee</h2>
             {paidMonths ? (

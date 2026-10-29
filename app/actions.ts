@@ -277,3 +277,134 @@ export async function signOut() {
   await sb.auth.signOut();
   redirect("/login");
 }
+
+// ───────────── Employee app access (mobile + PIN) ─────────────
+/** Creates or updates the employee's login and sets a new PIN (random if none given). The PIN is returned once. */
+export async function setEmployeePin(employeeId: string, pinInput?: string): Promise<{ ok: true; pin: string; mobile: string } | { ok: false; error: string }> {
+  const { adminDb, checkPin, mobile10, newPin, pinPassword, staffEmail } = await import("@/lib/employee-auth");
+  try {
+    const { sb } = await ctx();
+    const { data: e } = await sb.from("employees").select("id, name, mobile, status, auth_user_id").eq("id", employeeId).single();
+    if (!e) return { ok: false, error: "Employee not found" };
+    if (e.status === "Draft") return { ok: false, error: "Draft candidates don't get app access. Make them Active first." };
+    const m = mobile10(e.mobile);
+    if (!m) return { ok: false, error: "Add a 10-digit mobile number to this employee first; it's their login." };
+    const { data: others } = await sb.from("employees").select("mobile").neq("id", e.id).not("auth_user_id", "is", null);
+    if ((others || []).some((o) => mobile10(o.mobile) === m)) return { ok: false, error: "Another employee with app access has the same mobile number." };
+    const pin = pinInput?.trim() || newPin();
+    checkPin(pin);
+    const admin = adminDb();
+    const attrs = { email: staffEmail(m), password: pinPassword(m, pin), email_confirm: true,
+      app_metadata: { kind: "employee", employee_id: e.id }, user_metadata: { name: e.name }, ban_duration: "none" };
+    let userId = e.auth_user_id as string | null;
+    if (userId) {
+      const { error } = await admin.auth.admin.updateUserById(userId, attrs);
+      if (error) return { ok: false, error: error.message };
+    } else {
+      const { data, error } = await admin.auth.admin.createUser(attrs);
+      if (error || !data.user) return { ok: false, error: error?.message.includes("already") ? "A login for this mobile number already exists. Contact support to link it." : error?.message || "Couldn't create the login" };
+      userId = data.user.id;
+    }
+    const { error: e2 } = await sb.from("employees").update({ auth_user_id: userId, app_access: true }).eq("id", e.id);
+    if (e2) return { ok: false, error: e2.message };
+    revalidatePath(`/employees/${e.id}`);
+    return { ok: true, pin, mobile: m };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+/** Turns off the employee's app access and signs them out everywhere. */
+export async function disableEmployeeApp(form: FormData) {
+  const { adminDb } = await import("@/lib/employee-auth");
+  const { sb } = await ctx();
+  const id = String(form.get("id"));
+  const { data: e } = await sb.from("employees").select("auth_user_id").eq("id", id).single();
+  const { error } = await sb.from("employees").update({ app_access: false }).eq("id", id);
+  if (error) fail(error.message);
+  if (e?.auth_user_id) {
+    try { await adminDb().auth.admin.updateUserById(e.auth_user_id, { ban_duration: "876000h" }); } catch { /* access is already off in the database */ }
+  }
+  revalidatePath(`/employees/${id}`);
+  redirect(`/employees/${id}?saved=1#app-access`);
+}
+
+// ───────────── Attendance: sites, HR marks, payroll days ─────────────
+/** Adds a site from a Google Maps link (short links too) or "lat, lng". */
+export async function saveSite(form: FormData) {
+  const { parseLatLng } = await import("@/lib/geo");
+  const { sb } = await ctx();
+  const name = str(form, "name");
+  let where = str(form, "where") || "";
+  if (!name) fail("Give the site a name");
+  // Short links (maps.app.goo.gl / goo.gl/maps) redirect to the full link with the coordinates
+  const isShort = (u: string) => { try { const h = new URL(u).hostname; return h === "maps.app.goo.gl" || h === "goo.gl"; } catch { return false; } };
+  if (isShort(where)) {
+    try {
+      for (let i = 0; i < 4 && isShort(where); i++) {
+        const r = await fetch(where, { redirect: "manual" });
+        const loc = r.headers.get("location");
+        if (!loc) break;
+        where = loc;
+      }
+    } catch { /* fall through to the parse error */ }
+  }
+  const p = parseLatLng(where);
+  if (!p) fail("Couldn't read a location. Paste a Google Maps link to the site, or the coordinates like 28.8955, 76.6066.");
+  const radius = Math.round(numv(form, "radius_m") || 300);
+  const { error } = await sb.from("sites").insert({ name, lat: p!.lat, lng: p!.lng, radius_m: radius });
+  if (error) fail(error.message);
+  revalidatePath("/attendance/sites");
+  redirect("/attendance/sites?saved=1");
+}
+
+export async function updateSite(form: FormData) {
+  const { sb } = await ctx();
+  const id = String(form.get("id"));
+  const row: Record<string, unknown> = {};
+  if (form.has("radius_m")) row.radius_m = Math.round(numv(form, "radius_m"));
+  if (form.has("active")) row.active = form.get("active") === "true";
+  if (form.has("name")) row.name = str(form, "name");
+  const { error } = await sb.from("sites").update(row).eq("id", id);
+  if (error) fail(error.message);
+  revalidatePath("/attendance/sites");
+  redirect("/attendance/sites?saved=1");
+}
+
+/** HR marks (or clears) a day for an employee; a reason is required. */
+export async function markAttendance(form: FormData) {
+  const { sb } = await ctx();
+  const employee_id = String(form.get("employee_id")), day = String(form.get("day"));
+  const status = str(form, "hr_status"), note = str(form, "hr_note");
+  const back = `/attendance?m=${day.slice(0, 7)}&e=${employee_id}&d=${day}`;
+  if (status && !note) fail("Add a reason for the mark (e.g. \"Phone not working, site in-charge confirmed\").");
+  const { data: row } = await sb.from("attendance").select("id, in_at").eq("employee_id", employee_id).eq("day", day).maybeSingle();
+  let error;
+  if (row) ({ error } = await sb.from("attendance").update({ hr_status: status, hr_note: status ? note : null, updated_at: new Date().toISOString() }).eq("id", row.id));
+  else if (status) ({ error } = await sb.from("attendance").insert({ employee_id, day, hr_status: status, hr_note: note }));
+  if (error) fail(error.message);
+  revalidatePath("/attendance");
+  redirect(`${back}&saved=1`);
+}
+
+/** Applies suggested days from attendance to the chosen employees in a draft month. */
+export async function applyAttendanceDays(form: FormData) {
+  const { suggestDays } = await import("@/lib/attendance");
+  const c = await ctx();
+  const runId = String(form.get("run_id"));
+  const chosen = form.getAll("line_id").map(String);
+  if (!chosen.length) fail("Tick at least one employee.");
+  const run = await attempt(ops.loadRun(c, runId));
+  if (run.status === "finalized") fail("Reopen the month first.");
+  const { data: lines } = await c.sb.from("payroll_lines").select("id, employee_id, snapshot, remarks").in("id", chosen);
+  const ym = run.month.slice(0, 7);
+  const { data: rows } = await c.sb.from("attendance").select("employee_id, day, in_at, in_on_site, hr_status")
+    .gte("day", `${ym}-01`).lte("day", `${ym}-31`);
+  const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
+  for (const l of lines || []) {
+    const s = suggestDays(l.snapshot, run.month, (rows || []).filter((r) => r.employee_id === l.employee_id && String(r.day).startsWith(ym)), today);
+    await attempt(ops.saveLine(c, l.id, { working_days: s.working_days, paid_offs: s.paid_offs, leaves: s.leaves, lop_days: s.lop_days }));
+  }
+  revalidatePath(`/payroll/${runId}`);
+  redirect(`/payroll/${runId}?saved=1`);
+}

@@ -11,11 +11,11 @@ function merge(a: BreakupRow[], b: BreakupRow[] | undefined) {
   return out;
 }
 
-export default function BreakupTable({ b, prev, showHow = false }: { b: Breakup; prev?: Breakup | null; showHow?: boolean }) {
+export default function BreakupTable({ b, prev, showHow = false, yearly = true }: { b: Breakup; prev?: Breakup | null; showHow?: boolean; yearly?: boolean }) {
   if (b.error) return <p style={{ color: "var(--bad)" }}>{b.error}</p>;
   const cmp = !!prev && !prev.error;
   const prevOf = (key: string, list: BreakupRow[] | undefined) => list?.find((r) => r.key === key)?.monthly ?? 0;
-  const cols = 3 + (cmp ? 2 : 0) + (showHow ? 1 : 0);
+  const cols = 2 + (yearly ? 1 : 0) + (cmp ? 2 : 0) + (showHow ? 1 : 0);
 
   const change = (now: number, before: number) => {
     const d = Math.round(now - before);
@@ -28,7 +28,7 @@ export default function BreakupTable({ b, prev, showHow = false }: { b: Breakup;
       {cmp && <td className="num muted">{inr(prevOf(r.key, list))}</td>}
       <td className="num">{inr(r.monthly)}</td>
       {cmp && <td className="num small">{change(r.monthly, prevOf(r.key, list))}</td>}
-      <td className="num muted">{inr(r.annual)}</td>
+      {yearly && <td className="num muted">{inr(r.annual)}</td>}
       {showHow && <td className="mono small muted" style={{ maxWidth: 420, whiteSpace: "normal" }}>{r.expr}</td>}
     </tr>
   );
@@ -38,7 +38,7 @@ export default function BreakupTable({ b, prev, showHow = false }: { b: Breakup;
       {cmp && <td className="num muted"><b>{inr(before?.monthly ?? 0)}</b></td>}
       <td className="num"><b>{inr(p.monthly)}</b></td>
       {cmp && <td className="num small"><b>{change(p.monthly, before?.monthly ?? 0)}</b></td>}
-      <td className="num"><b>{inr(p.annual)}</b></td>
+      {yearly && <td className="num"><b>{inr(p.annual)}</b></td>}
       {showHow && <td />}
     </tr>
   );
@@ -54,7 +54,7 @@ export default function BreakupTable({ b, prev, showHow = false }: { b: Breakup;
           {cmp && <th className="num">Before / month</th>}
           <th className="num">{cmp ? "Now / month" : "Per month"}</th>
           {cmp && <th className="num">Change</th>}
-          <th className="num">Per year</th>
+          {yearly && <th className="num">Per year</th>}
           {showHow && <th>How it&apos;s worked out</th>}
         </tr></thead>
         <tbody>

@@ -1,4 +1,5 @@
 // Re-computes every month processed in the Google Sheet and compares in-hand salary to the rupee.
+import { suggestDays } from "../lib/attendance";
 import { DEFAULT_FORMULAS, SHEET_FORMULAS_FY26, calculate, validateFormulas, suggestOtIncentive } from "../lib/payroll";
 import { parse, evalNode } from "../lib/formula";
 import { EMPLOYEES, STRUCTURES, HISTORY, CTC_CHECKS } from "../data/sheet-import";
@@ -104,6 +105,33 @@ check("KA LWF not Oct", oct("Emp 43", {}, "2026-10-01", undefined, { lwf_applica
 const ded = oct("Emp 14", { advance_recovery: 1000, other_deduction: 250.4 });
 check("typed deductions", ded.total_deductions, ded.esi_employee + ded.pf_employee + 1250.4, 0.01);
 check("net rounded", ded.net_pay % 1, 0, 0);
+
+
+// ───────────── Attendance → payroll days ─────────────
+{
+  // Nov 2026: 30 days, Sundays 1, 8, 15, 22, 29; "today" = 15 Nov
+  const rows = [
+    ...["02", "03", "04", "05", "06", "07"].map((d) => ({ day: `2026-11-${d}`, in_at: "x", in_on_site: true, hr_status: null })),
+    { day: "2026-11-09", in_at: "x", in_on_site: false, hr_status: null },
+    { day: "2026-11-10", in_at: null, hr_status: "leave" },
+    { day: "2026-11-11", in_at: null, hr_status: "half_day" },
+    { day: "2026-11-12", in_at: null, hr_status: "holiday" },
+    { day: "2026-11-15", in_at: "x", in_on_site: true, hr_status: null }, // worked a Sunday
+  ];
+  const s = suggestDays({ date_of_joining: "2024-01-01", date_of_leaving: null }, "2026-11-01", rows, "2026-11-15");
+  check("att worked", s.working_days, 6 + 1 + 0.5 + 1 + 13, 0);   // 13 = future weekdays 16–30
+  check("att offs", s.paid_offs, 2 + 1 + 2, 0);                  // Sun 1, 8 · holiday 12 · future Sun 22, 29
+  check("att leaves", s.leaves, 1, 0);
+  check("att lop", s.lop_days, 0.5 + 2, 0);                      // half day · no check-in 13, 14
+  check("att total = days", s.working_days + s.paid_offs + s.leaves + s.lop_days, 30, 0);
+  check("att away", s.away, 1, 0);
+  check("att future", s.future_days, 15, 0);
+  const joiner = suggestDays({ date_of_joining: "2026-11-20", date_of_leaving: "2026-11-27" }, "2026-11-01",
+    [{ day: "2026-11-20", in_at: "x", hr_status: null }, { day: "2026-11-21", in_at: "x", hr_status: null }], "2026-11-30");
+  check("att joiner worked", joiner.working_days, 2, 0);
+  check("att joiner offs", joiner.paid_offs, 1, 0);               // Sun 22
+  check("att joiner lop", joiner.lop_days, 30 - 3, 0);
+}
 
 console.log(`\n${pass} checks passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

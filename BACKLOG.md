@@ -104,3 +104,12 @@ The 4.81% accrual understates the real liability.
 - **Files through Claude:** slips, HDFC and Orgzit files are links that open in the browser (they need the app login). Consider signed, short-lived download links so Claude can hand over the file itself.
 - **Two-step login + connector:** if two-step login is on and the connector says the login "isn't allowed", Supabase OAuth tokens may not carry the two-step level (aal2). Check with a test connection; the fix would be in `is_allowed()`.
 - **Bulk attendance:** a tool to apply a whole month's attendance from a pasted table or sheet in one call.
+
+## Staff app follow-ups (deferred 29 Oct 2026)
+- **Sign-in with Google / email magic link:** most staff have no email on file. Collect personal Gmail IDs first; magic links need the company's own mail server (SMTP) set up in Supabase.
+- **Requests HR approves:** change of bank / mobile / address (with proof), OT / site work claims (feed OT incentives), salary advance (feeds advance recovery).
+- **Hindi** labels.
+- **Leave balance and leave requests**, holiday calendar (see #17).
+- **Attendance in the MCP connector:** tools to read the grid and mark days.
+- **Login-attempt clean-up:** remove attempts older than 30 days (the table grows by a few rows a day).
+- **If HR changes a mobile number:** today HR must set a new PIN; consider updating the login automatically.

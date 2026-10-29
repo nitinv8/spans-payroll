@@ -176,6 +176,7 @@ export default async function RunPage({ params }: { params: { id: string } }) {
             <div style={{ minWidth: 240 }}><label htmlFor="notes">Notes</label><input id="notes" name="notes" defaultValue={run.notes || ""} /></div>
             <button className="btn">Save</button>
           </form>
+          <Link className="btn" href={`/payroll/${run.id}/attendance`}>Fill days from attendance</Link>
           <form action={pullOtIncentives}><input type="hidden" name="run_id" value={run.id} />
             <ConfirmButton message="Replace each employee's Incentive with the total from OT incentives for this month?">Pull OT incentives</ConfirmButton>
           </form>
