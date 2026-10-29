@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { pageDb } from "@/lib/data";
-import { saveCompany, addAppUser, removeAppUser } from "@/app/actions";
+import { saveCompany, addAppUser, removeAppUser, revokeConnectedApp } from "@/app/actions";
 import PasswordForm from "@/components/PasswordForm";
 import TwoStep from "@/components/TwoStep";
 import ConfirmButton from "@/components/Confirm";
 
 export default async function Settings() {
   const { sb, user } = await pageDb();
-  const [{ data: c }, { data: users }] = await Promise.all([
+  const [{ data: c }, { data: users }, grants] = await Promise.all([
     sb.from("company_settings").select("*").eq("id", 1).single(),
     sb.from("app_users").select("*").order("email"),
+    sb.auth.oauth.listGrants().catch(() => ({ data: null })),
   ]);
   const o = (c?.orgzit || {}) as Record<string, any>;
   const F = ({ n, l, v }: { n: string; l: string; v: string }) => (
@@ -73,6 +74,26 @@ export default async function Settings() {
           <h2 style={{ marginTop: 22 }}>Two-step login</h2>
           <TwoStep />
         </div>
+      </div>
+
+      <div className="panel" id="connected-apps" style={{ marginTop: 16 }}>
+        <h2>Connected apps</h2>
+        <p className="muted small" style={{ marginTop: -4 }}>
+          Apps you&apos;ve allowed to use Spans Payroll as you, e.g. Claude through the payroll connector
+          (<span className="mono">/api/mcp</span>). What they change shows in the audit log as “via connected app”.
+        </p>
+        {!grants?.data?.length ? <p className="muted" style={{ margin: 0 }}>None connected.</p> : (
+          <table><tbody>
+            {grants.data.map((g) => (
+              <tr key={g.client.id}>
+                <td><b>{g.client.name || "Unnamed app"}</b>{g.client.uri && <span className="muted small"> · {g.client.uri}</span>}</td>
+                <td className="muted small">connected {new Date(g.granted_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</td>
+                <td><form action={revokeConnectedApp}><input type="hidden" name="client_id" value={g.client.id} />
+                  <ConfirmButton className="btn sm danger" message={`Remove ${g.client.name || "this app"}'s access? It will need to be connected again.`}>Remove access</ConfirmButton></form></td>
+              </tr>
+            ))}
+          </tbody></table>
+        )}
       </div>
     </>
   );

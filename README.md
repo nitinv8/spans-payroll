@@ -68,6 +68,29 @@ npm test                     # payroll engine vs the Google Sheet (needs data/sh
 Salary change: Employees → person → **Salary history** → *Add a revision* with the effective month.
 Statutory rate change (for example the PF wage ceiling): **Formulas** → *New version* → set "Applies from" → edit the parameter → Save.
 
+## Use it from Claude (MCP connector)
+
+The app has an MCP server at `https://<your-app>/api/mcp`. With it, Claude can list and change employees and salary revisions, run a month (start, attendance, recalculate, finalize), handle OT and bonus, and edit formulas. It uses the same rules as the web app (`lib/ops.ts`).
+
+**Sign-in.** Claude signs in through Supabase's OAuth 2.1 server and the app's own consent page (`/oauth/consent`). You sign in with your normal login and two-step code, then click **Allow**. Claude then acts as you:
+
+- The same database access rules and finalized-month locks apply.
+- Every change and reveal is in the audit log as "you (via connected app)".
+- Bank, Aadhaar and PAN numbers are masked; showing one in full is logged.
+- A connected app can't add or remove sign-in users.
+
+**One-time setup in Supabase** (Dashboard → Authentication):
+1. **URL Configuration → Site URL** = your app URL, e.g. `https://spans-payroll.vercel.app`.
+2. **OAuth Server** → enable it, set **Authorization Path** to `/oauth/consent`, and turn on **Dynamic client registration**.
+
+**Connect.**
+- **Claude (web, desktop, mobile):** Settings → Connectors → Add custom connector. Name it "Spans Payroll", URL `https://<your-app>/api/mcp`, then Connect and approve on the consent page.
+- **Claude Code:** `claude mcp add --transport http spans-payroll https://<your-app>/api/mcp`, then `/mcp` to sign in.
+
+Remove access any time in **Settings → Connected apps**.
+
+**Tools (37):** whoami · list/get/create/update/delete employee · reveal_employee_number · save/delete salary revision · preview_salary · list/get/create/delete payroll month · get_payroll_line · update_payroll_line · add/remove employee to month · recalculate_month · pull_ot_incentives · update_month_details · finalize_month · reopen_month · list/add/delete OT entries · list/add/delete bonus payments · list/get/save/delete formula version · update_formula · get/update company settings · list_audit_log.
+
 ## Formula language
 Spreadsheet-style and safe: no code is executed. Operators: `+ - * / ^`, comparisons, `and/or/not`, `a ? b : c`, `12%`.
 Functions: `if`, `min`, `max`, `round(x,d)`, `roundup`, `rounddown`, `ceil`, `floor`, `abs`, `contains(text,"part")`.

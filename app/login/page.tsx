@@ -2,6 +2,12 @@
 import { useEffect, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
+/** Where to go after signing in (e.g. back to the connect-Claude page); same-site paths only. */
+const nextPath = () => {
+  const n = new URLSearchParams(window.location.search).get("next");
+  return n && n.startsWith("/") && !n.startsWith("//") && !n.startsWith("/\\") ? n : "/";
+};
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,7 +30,7 @@ export default function Login() {
     const { error } = await supabaseBrowser().auth.signInWithPassword({ email, password });
     if (error) { setBusy(false); return setErr(error.message); }
     if (await needsCode()) { setBusy(false); setStep("code"); return; }
-    window.location.href = "/";
+    window.location.href = nextPath();
   }
 
   async function submitCode(e: React.FormEvent) {
@@ -37,7 +43,7 @@ export default function Login() {
     const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.trim() });
     setBusy(false);
     if (error) return setErr(error.message === "Invalid TOTP code entered" ? "That code didn't match. Try the latest code from your app." : error.message);
-    window.location.href = "/";
+    window.location.href = nextPath();
   }
 
   async function reset() {

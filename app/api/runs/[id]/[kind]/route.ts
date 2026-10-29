@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: { id: string; kin
   const mode = finalized ? "final" : "provisional";
   const log = async (kind: string, rows: number, total: number) => {
     const { data: { user } } = await g.sb.auth.getUser();
-    await g.sb.from("export_log").insert({ run_id: run.id, kind, rows, total, actor: user?.email ?? null });
+    await g.sb.from("export_log").insert({ run_id: run.id, kind, rows, total });
   };
   const blocked = (what: string) => new Response(
     `${what} can only be downloaded after the month is finalized, so the amounts can't change afterwards. Finalize the month first, then download again.`,

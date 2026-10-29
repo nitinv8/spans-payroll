@@ -10,13 +10,15 @@
     "seed": "tsx scripts/make-seed.ts"
   },
   "dependencies": {
-    "@supabase/ssr": "0.5.2",
-    "@supabase/supabase-js": "2.45.4",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.3",
     "jszip": "3.10.1",
     "next": "14.2.35",
     "pdf-lib": "1.17.1",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

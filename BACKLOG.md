@@ -99,3 +99,8 @@ The 4.81% accrual understates the real liability.
 - **ESIC wage treatment** of conveyance and HRA under the Code on Social Security: confirm.
 - **Haryana LWF coverage:** confirm exclusions (managerial staff); LWF was switched on for all Haryana and Karnataka staff. Also confirm Jan–Apr 2026 arrears at ₹35/₹70, the current Karnataka LWF rate (₹50/₹100 assumed), and whether Delhi LWF applies.
 - **Deduction limits:** a warning shows above 50% of wages. Add written-notice tracking for fines (Code on Wages).
+
+## MCP connector follow-ups (29 Oct 2026)
+- **Files through Claude:** slips, HDFC and Orgzit files are links that open in the browser (they need the app login). Consider signed, short-lived download links so Claude can hand over the file itself.
+- **Two-step login + connector:** if two-step login is on and the connector says the login "isn't allowed", Supabase OAuth tokens may not carry the two-step level (aal2). Check with a test connection; the fix would be in `is_allowed()`.
+- **Bulk attendance:** a tool to apply a whole month's attendance from a pasted table or sheet in one call.
