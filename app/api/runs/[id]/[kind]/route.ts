@@ -3,6 +3,7 @@ import { apiDb, loadRunWithLines, download } from "@/lib/api";
 import { hdfcCsv, orgzitCsv, registerCsv } from "@/lib/exports";
 import { buildSlipsPdf, slipFilename } from "@/lib/slip-pdf";
 import { monthLabel } from "@/lib/payroll";
+import { consultantWorkbook } from "@/lib/consultant-xlsx";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,11 @@ export async function GET(_req: Request, { params }: { params: { id: string; kin
       const r = registerCsv(run, lines);
       await log("register", lines.length, lines.reduce((a, l) => a + (Number(l.net_pay) || 0), 0));
       return download("\uFEFF" + r.csv, r.filename, "text/csv; charset=utf-8");
+    }
+    case "consultant": {
+      const x = await consultantWorkbook(run, lines, company);
+      await log("consultant", lines.length, lines.reduce((a, l) => a + (Number(l.net_pay) || 0), 0));
+      return download(x.buffer, x.filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
     case "slips": {
       const pdf = await buildSlipsPdf(company, run.month, run.formulas, ok, mode);

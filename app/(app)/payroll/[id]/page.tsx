@@ -121,6 +121,7 @@ export default async function RunPage({ params }: { params: { id: string } }) {
             </>
           )}
           <a className="btn" href={`/api/runs/${run.id}/register`}>Salary register CSV</a>
+          <a className="btn" href={`/api/runs/${run.id}/consultant`} title="One row per employee with the full calculation, plus PF/ESI challan totals">Excel for PF/ESI consultant</a>
         </div>
         {!locked && <p className="muted small" style={{ marginBottom: 0 }}>The HDFC and Orgzit files unlock after you <b>Finalize &amp; lock</b>, so amounts can&apos;t change after the bank file is made. Slips from an unfinalized month are marked PROVISIONAL.</p>}
 
@@ -145,7 +146,7 @@ export default async function RunPage({ params }: { params: { id: string } }) {
               <table><tbody>
                 {exportsLog.slice(0, 8).map((x, i) => (
                   <tr key={i}><td className="small">{new Date(x.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                    <td className="small">{{ hdfc: "HDFC file", orgzit: "Orgzit file", register: "Register", slips: "Slips" }[x.kind as string] ?? x.kind}</td>
+                    <td className="small">{{ hdfc: "HDFC file", orgzit: "Orgzit file", register: "Register", slips: "Slips", consultant: "PF/ESI Excel" }[x.kind as string] ?? x.kind}</td>
                     <td className="small num">{x.total ? `₹${inr(x.total)}` : `${x.rows}`}</td><td className="small muted">{x.actor}</td></tr>
                 ))}
               </tbody></table>

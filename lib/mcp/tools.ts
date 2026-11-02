@@ -99,6 +99,7 @@ function downloads(base: string, runId: string, locked: boolean) {
     note: "Links open in the browser and need you to be signed in to the payroll app.",
     slips_pdf: `${base}/api/runs/${runId}/slips`, slips_zip: `${base}/api/runs/${runId}/slips-zip`,
     register_csv: `${base}/api/runs/${runId}/register`,
+    pf_esi_consultant_xlsx: `${base}/api/runs/${runId}/consultant`,
     ...(locked ? { hdfc_csv: `${base}/api/runs/${runId}/hdfc`, orgzit_csv: `${base}/api/runs/${runId}/orgzit` }
       : { hdfc_and_orgzit: "Available after the month is finalized." }),
     month_page: `${base}/payroll/${runId}`,
