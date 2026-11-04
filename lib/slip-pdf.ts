@@ -57,6 +57,20 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
     page.drawText(safe(t), { x, y: yy, size, font: f, color });
   const right = (t: string, xr: number, yy: number, size = 9.5, f = font) => text(t, xr - f.widthOfTextAtSize(safe(t), size), yy, size, f);
   const hr = (yy: number) => page.drawLine({ start: { x: M, y: yy }, end: { x: width - M, y: yy }, thickness: 0.6, color: line });
+  // A label + amount row that never overlaps: a long label loses any "(…)" note, then shrinks, then is cut with "...".
+  const item = (label: string, amount: string, xl: number, xr: number, yy: number) => {
+    const amt = safe(amount);
+    right(amt, xr - 6, yy);
+    const room = (xr - 6) - font.widthOfTextAtSize(amt, 9.5) - 10 - (xl + 6);
+    let t = safe(label).trim(), size = 9.5;
+    if (font.widthOfTextAtSize(t, size) > room) t = t.replace(/\s*\([^)]*\)\s*$/, "").trim() || t;
+    while (font.widthOfTextAtSize(t, size) > room && size > 7.5) size -= 0.5;
+    if (font.widthOfTextAtSize(t, size) > room) {
+      while (t.length > 1 && font.widthOfTextAtSize(t + "...", size) > room) t = t.slice(0, -1);
+      t = t.trimEnd() + "...";
+    }
+    text(t, xl + 6, yy, size);
+  };
 
   // Header
   text(company.name, M, y, 15, bold); y -= 15;
@@ -92,7 +106,7 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   if (!draft) {
     page.drawRectangle({ x: M, y: y - 11, width: width - 2 * M, height: 28, color: band });
     const colW = (width - 2 * M) / days.length;
-    days.forEach(([k, v], i) => { text(k, M + 8 + i * colW, y + 4, 7.5, font, muted); text(v, M + 8 + i * colW, y - 4, 9.5, bold); });
+    days.forEach(([k, v], i) => { text(k, M + 8 + i * colW, y + 7, 7.5, font, muted); text(v, M + 8 + i * colW, y - 6, 9.5, bold); });
     y -= 30;
   }
 
@@ -110,8 +124,8 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   const rowsN = Math.max(earnings.length, employer.length);
   for (let i = 0; i < rowsN; i++) {
     const e = earnings[i], r = employer[i];
-    if (e) { text(e.label, L1 + 6, y); right(fmt(c[e.key]), R1 - 6, y); }
-    if (r) { text(r.label, L2 + 6, y); right(fmt(c[r.key]), R2 - 6, y); }
+    if (e) item(e.label, fmt(c[e.key]), L1, R1, y);
+    if (r) item(r.label, fmt(c[r.key]), L2, R2, y);
     y -= 14;
   }
   const empTotal = employer.reduce((a, f) => a + (Number(c[f.key]) || 0), 0);
@@ -126,14 +140,14 @@ function drawSlip(page: PDFPage, font: PDFFont, bold: PDFFont, company: Company,
   for (const d of deductions) {
     const v = Number(c[d.key]) || 0;
     if (["professional_tax", "d_advance", "d_other"].includes(d.key) && v === 0) continue;
-    text(d.label, L1 + 6, y); right(fmt(v), R1 - 6, y); y -= 14;
+    item(d.label, fmt(v), L1, R1, y); y -= 14;
   }
   page.drawLine({ start: { x: L1, y: y + 9 }, end: { x: R1, y: y + 9 }, thickness: 0.6, color: line });
   text("Total Employee Deductions", L1 + 6, y - 2, 9.5, bold); right(fmt(c.total_deductions), R1 - 6, y - 2, 9.5, bold);
   y -= 16;
   if (Math.abs(Number(l.manual_adjustment) || 0) >= 0.5) {
-    text((Number(l.manual_adjustment) > 0 ? "Other addition" : "Other adjustment") + (l.remarks ? ` (${l.remarks.slice(0, 30)})` : ""), L1 + 6, y - 2, 9.5);
-    right((Number(l.manual_adjustment) > 0 ? "+" : "") + fmt(l.manual_adjustment), R1 - 6, y - 2, 9.5);
+    item((Number(l.manual_adjustment) > 0 ? "Other addition" : "Other adjustment") + (l.remarks ? ` (${l.remarks.slice(0, 30)})` : ""),
+      (Number(l.manual_adjustment) > 0 ? "+" : "") + fmt(l.manual_adjustment), L1, R1, y - 2);
     y -= 16;
   }
   y -= 12;
