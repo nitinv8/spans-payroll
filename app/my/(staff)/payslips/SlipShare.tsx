@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
-import { monthLabel } from "@/lib/payroll";
+import { slipFilename } from "@/lib/payroll";
 
 export default function SlipShare({ lineId, month, name }: { lineId: string; month: string; name: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const url = `/api/my/slip/${lineId}`;
-  const filename = `Spans ${monthLabel(month)} Salary Slip - ${name}.pdf`;
+  const filename = slipFilename(month, name);
   const canShare = typeof navigator !== "undefined" && !!navigator.canShare;
 
   async function share() {

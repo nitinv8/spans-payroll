@@ -348,3 +348,7 @@ export const inr = (n: number | null | undefined, dp = 0) =>
   n == null || Number.isNaN(Number(n)) || Number(n) === 0
     ? "-"
     : Number(n).toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+
+// Salary slip file name: employee name, then the salary month and year (e.g. "Mohit Salary October 2026.pdf").
+export const slipFilename = (month: string, name?: string) =>
+  name ? `${name.replace(/[^\w .-]/g, "").replace(/\s+/g, " ").trim()} Salary ${monthLabel(month)}.pdf` : `Spans Salary Slips ${monthLabel(month)}.pdf`;

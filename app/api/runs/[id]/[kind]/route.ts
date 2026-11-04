@@ -56,7 +56,7 @@ export async function GET(_req: Request, { params }: { params: { id: string; kin
       const zip = new JSZip();
       for (const l of ok) {
         const pdf = await buildSlipsPdf(company, run.month, run.formulas, [l], mode);
-        zip.file(`${l.print_code} ${slipFilename(run.month, l.snapshot.name)}`, pdf);
+        zip.file(slipFilename(run.month, l.snapshot.name), pdf);
       }
       const buf = await zip.generateAsync({ type: "nodebuffer" });
       await log("slips", ok.length, 0);

@@ -284,5 +284,4 @@ export async function buildBreakupPdf(company: Company, b: Breakup, info: Breaku
   return doc.save();
 }
 
-export const slipFilename =(month: string, name?: string) =>
-  name ? `Spans ${monthLabel(month)} Salary Slip - ${name.replace(/[^\w .-]/g, "")}.pdf` : `Spans ${monthLabel(month)} Salary Slips.pdf`;
+export { slipFilename } from "./payroll";
