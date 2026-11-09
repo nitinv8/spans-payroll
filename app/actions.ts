@@ -398,11 +398,13 @@ export async function applyAttendanceDays(form: FormData) {
   if (run.status === "finalized") fail("Reopen the month first.");
   const { data: lines } = await c.sb.from("payroll_lines").select("id, employee_id, snapshot, remarks").in("id", chosen);
   const ym = run.month.slice(0, 7);
-  const { data: rows } = await c.sb.from("attendance").select("employee_id, day, in_at, in_on_site, hr_status")
-    .gte("day", `${ym}-01`).lte("day", `${ym}-31`);
+  // a week either side so weeks crossing the month boundary are seen whole (weekly-off rule)
+  const near = (n: number) => new Date(Date.parse(`${ym}-01T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const { data: rows } = await c.sb.from("attendance").select("employee_id, day, in_at, in_on_site, hr_status, self_status")
+    .gte("day", near(-6)).lte("day", near(37));
   const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
   for (const l of lines || []) {
-    const s = suggestDays(l.snapshot, run.month, (rows || []).filter((r) => r.employee_id === l.employee_id && String(r.day).startsWith(ym)), today);
+    const s = suggestDays(l.snapshot, run.month, (rows || []).filter((r) => r.employee_id === l.employee_id && String(r.day) >= near(-6) && String(r.day) <= near(37)), today);
     await attempt(ops.saveLine(c, l.id, { working_days: s.working_days, paid_offs: s.paid_offs, leaves: s.leaves, lop_days: s.lop_days }));
   }
   revalidatePath(`/payroll/${runId}`);

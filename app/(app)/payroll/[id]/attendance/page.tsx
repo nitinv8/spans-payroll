@@ -13,14 +13,14 @@ export default async function FillFromAttendance({ params }: { params: { id: str
   const ym = run.month.slice(0, 7);
   const [{ data: lines }, { data: rows }] = await Promise.all([
     sb.from("payroll_lines").select("id, print_code, employee_id, snapshot, working_days, paid_offs, leaves, lop_days").eq("run_id", run.id),
-    sb.from("attendance").select("employee_id, day, in_at, in_on_site, hr_status").gte("day", `${ym}-01`).lte("day", `${ym}-31`),
+    sb.from("attendance").select("employee_id, day, in_at, in_on_site, hr_status, self_status").gte("day", around(`${ym}-01`, -6)).lte("day", around(run.month, 37)),
   ]);
   const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
   const list = (lines || []).sort((a, b) => Number(a.print_code?.slice(1)) - Number(b.print_code?.slice(1))).map((l) => {
-    const mine = (rows || []).filter((r) => r.employee_id === l.employee_id && String(r.day).startsWith(ym));
+    const mine = (rows || []).filter((r) => r.employee_id === l.employee_id && String(r.day) >= around(`${ym}-01`, -6) && String(r.day) <= around(run.month, 37));
     const s = suggestDays(l.snapshot, run.month, mine, today);
     const same = s.working_days === Number(l.working_days) && s.paid_offs === Number(l.paid_offs) && s.leaves === Number(l.leaves) && s.lop_days === Number(l.lop_days);
-    return { l, s, has: mine.length > 0, same };
+    return { l, s, has: mine.some((r) => String(r.day).startsWith(ym)), same };
   });
   const locked = run.status === "finalized";
   const D = ({ w, o, l, lop }: { w: number; o: number; l: number; lop: number }) => <span className="mono">{w} / {o} / {l} / {lop}</span>;
@@ -33,10 +33,10 @@ export default async function FillFromAttendance({ params }: { params: { id: str
         <Link className="btn" href={`/payroll/${run.id}`}>Back to the month</Link>
       </div>
       {locked && <div className="notice warn">This month is finalized. Reopen it to change days.</div>}
-      {list.some((x) => x.s.future_days > 0) && <div className="notice warn">The month isn&apos;t over: days after {fmtDate(today)} are counted as normal (worked, Sundays off).</div>}
+      {list.some((x) => x.s.future_days > 0) && <div className="notice warn">The month isn&apos;t over: days after {fmtDate(today)} are counted as normal (worked; marked weekly offs, or else Sundays, off).</div>}
       <form action={applyAttendanceDays} className="panel">
         <input type="hidden" name="run_id" value={run.id} />
-        <p className="small muted" style={{ marginTop: 0 }}>Days shown as worked / offs / paid leave / LOP. A day with no check-in and no HR mark counts as LOP (Sundays as off). Mark missed days on the Attendance page first.</p>
+        <p className="small muted" style={{ marginTop: 0 }}>Days shown as worked / offs / paid leave / LOP. A weekly off the employee marked in the app counts as a paid off. A day with no check-in and no HR mark counts as LOP, except Sunday, which is the weekly off unless they marked another day that week. Mark missed days on the Attendance page first.</p>
         <div className="tablewrap">
           <table>
             <thead><tr><th></th><th>#</th><th>Employee</th><th>Now</th><th>From attendance</th><th className="num">Check-ins</th><th className="num">Away</th><th>Note</th></tr></thead>
@@ -59,3 +59,5 @@ export default async function FillFromAttendance({ params }: { params: { id: str
     </>
   );
 }
+
+const around = (iso: string, n: number) => new Date(Date.parse(iso.slice(0, 10) + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);

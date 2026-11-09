@@ -15,7 +15,7 @@ export type MySlip = {
   esi_employee: number | null; esi_employer: number | null;
 };
 export type MyDay = { day: string; in_at: string | null; out_at: string | null; in_on_site: boolean | null; out_on_site: boolean | null;
-  in_site: string | null; out_site: string | null; hr_status: string | null; hr_note: string | null };
+  in_site: string | null; out_site: string | null; hr_status: string | null; hr_note: string | null; self_status?: string | null };
 
 export const myDb = cache(async () => {
   const sb = supabaseServer();

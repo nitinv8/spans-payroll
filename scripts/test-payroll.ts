@@ -133,5 +133,30 @@ check("net rounded", ded.net_pay % 1, 0, 0);
   check("att joiner lop", joiner.lop_days, 30 - 3, 0);
 }
 
+// ───────────── Weekly off marked by the employee ─────────────
+{
+  // Nov 2026 (Sundays 1, 8, 15, 22, 29), today = 30 Nov. Absent 1, 4, 8, 15, 22, 28. Marked offs: Tue 27 Oct (same week as Sun 1),
+  // Wed 4 and Sat 28. So Sun 1 and Sun 8 are LOP (their week's off was another day); Sun 15 and 22 are the default weekly off.
+  const worked = (d: string) => ({ day: d, in_at: "x", in_on_site: true, hr_status: null });
+  const rows: { day: string; in_at: string | null; in_on_site?: boolean; hr_status: string | null; self_status?: string | null }[] = [];
+  for (let d = 2; d <= 30; d++) {
+    const iso = `2026-11-${String(d).padStart(2, "0")}`;
+    if ([4, 8, 15, 22, 28].includes(d)) continue;
+    rows.push(worked(iso));
+  }
+  rows.push({ day: "2026-10-27", in_at: null, hr_status: null, self_status: "week_off" });
+  rows.push({ day: "2026-11-04", in_at: null, hr_status: null, self_status: "week_off" });
+  rows.push({ day: "2026-11-28", in_at: null, hr_status: null, self_status: "week_off" });
+  const w = suggestDays({ date_of_joining: "2024-01-01", date_of_leaving: null }, "2026-11-01", rows, "2026-11-30");
+  check("wo worked", w.working_days, 24, 0);              // 2–30 minus 4, 8, 15, 22, 28
+  check("wo offs", w.paid_offs, 2 + 2, 0);                 // marked 4, 28 · Sundays 15, 22 (no mark those weeks)
+  check("wo lop", w.lop_days, 2, 0);                       // Sun 1 (week marked 27 Oct) · Sun 8 (week marked Wed 4)
+  check("wo total", w.working_days + w.paid_offs + w.leaves + w.lop_days, 30, 0);
+  const future = suggestDays({ date_of_joining: "2024-01-01", date_of_leaving: null }, "2026-11-01",
+    [{ day: "2026-11-25", in_at: null, hr_status: null, self_status: "week_off" }], "2026-11-20");
+  check("wo future offs", future.paid_offs, 5, 0);       // past Sundays 1, 8, 15 · Sun 22 · marked Wed 25 (Sun 29 then counts as worked)
+  check("wo future worked", future.working_days, 8, 0);  // 21, 23, 24, 26–29
+}
+
 console.log(`\n${pass} checks passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

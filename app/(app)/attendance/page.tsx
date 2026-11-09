@@ -7,6 +7,7 @@ import { markAttendance } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
+const istDay = (iso: string) => new Date(Date.parse(iso) + 5.5 * 3600e3).toISOString().slice(0, 10);
 const ist = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" }) : "");
 const shift = (m: string, n: number) => { const [y, mo] = m.split("-").map(Number); return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7); };
 const HR_LABEL: Record<string, [string, string]> = {
@@ -53,15 +54,16 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
   }
 
   const count = (eid: string) => {
-    let present = 0, away = 0, missing = 0;
+    let present = 0, away = 0, missing = 0, offs = 0;
     for (const d of days) {
       const r = at.get(`${eid}|${d}`);
+      if (!r?.hr_status && !r?.in_at && r?.self_status === "week_off") offs++;
       if (r?.hr_status === "present") present++;
       else if (r?.hr_status === "half_day") present += 0.5;
       else if (r?.in_at && !r.hr_status) { present++; if (r.in_on_site === false) away++; }
-      else if (!r && d <= today && !isSun(d)) missing++;
+      else if (!r?.in_at && !r?.hr_status && r?.self_status !== "week_off" && d <= today && !isSun(d)) missing++;
     }
-    return { present, away, missing };
+    return { present, away, missing, offs };
   };
 
   const Punch = ({ label, r, k }: { label: string; r: Row; k: "in" | "out" }) => !r[`${k}_at`] ? null : (
@@ -70,7 +72,7 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
         ? <a href={photos[r[`${k}_photo`]]} target="_blank" rel="noopener noreferrer"><img className="selfie" src={photos[r[`${k}_photo`]]} alt={`${label} selfie`} /></a>
         : <div className="selfie" style={{ display: "grid", placeItems: "center" }}><span className="muted small">{r[`${k}_photo`] ? "Photo unavailable" : "Photo deleted (90 days)"}</span></div>}
       <div>
-        <div><b>{label} {ist(r[`${k}_at`])}</b></div>
+        <div><b>{label} {ist(r[`${k}_at`])}</b>{k === "out" && r.out_at && istDay(r.out_at) !== r.day && <span className="small muted"> (next day, {fmtDate(istDay(r.out_at))})</span>}</div>
         <div>{r[`${k}_on_site`] ? <span className="badge ok">on site</span> : <span className="badge warn">away from site</span>}{" "}
           {siteName(r[`${k}_site_id`]) && <span className="small">{r[`${k}_on_site`] ? "" : "nearest: "}{siteName(r[`${k}_site_id`])} · {r[`${k}_distance_m`]} m</span>}</div>
         <div className="small muted">GPS accuracy ±{Math.round(r[`${k}_accuracy`] || 0)} m</div>
@@ -102,7 +104,8 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
           </div>
           {sel?.in_at ? (
             <div className="row" style={{ gap: 28, alignItems: "flex-start" }}><Punch label="In" r={sel} k="in" /><Punch label="Out" r={sel} k="out" /></div>
-          ) : <p className="muted">No check-in from the app on this day.</p>}
+          ) : sel?.self_status === "week_off" ? <p><span className="badge ok">Weekly off</span> <span className="small muted">marked by the employee in the app{sel.self_marked_at ? ` on ${fmtDate(istDay(sel.self_marked_at))}` : ""}</span></p>
+            : <p className="muted">No check-in from the app on this day.</p>}
           {sel?.in_at && !sel.out_at && <p className="muted small">No check-out recorded.</p>}
           <form action={markAttendance} className="row" style={{ alignItems: "end", marginTop: 14 }}>
             <input type="hidden" name="employee_id" value={selEmp.id} /><input type="hidden" name="day" value={searchParams.d} />
@@ -122,7 +125,7 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
       <div className="panel">
         <div className="row small muted" style={{ marginBottom: 8, gap: 14 }}>
           <span><span className="badge ok">✓</span> on site</span><span><span className="badge warn">!</span> away from site</span>
-          <span><span className="badge">P ½ A L H</span> marked by HR</span><span>· no check-in</span><span style={{ background: "#f3f4f6", padding: "0 6px" }}>Sunday</span>
+          <span><span className="badge">W</span> weekly off (marked by employee)</span><span><span className="badge">P ½ A L H</span> marked by HR</span><span>· no check-in</span><span style={{ background: "#f3f4f6", padding: "0 6px" }}>Sunday</span>
         </div>
         {!people.length ? <p className="muted">No active employees.</p> : (
           <div className="tablewrap">
@@ -130,7 +133,7 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
               <thead><tr>
                 <th className="name">Employee</th>
                 {days.map((d) => <th key={d} className={isSun(d) ? "sun" : ""}>{Number(d.slice(8))}</th>)}
-                <th className="num" style={{ paddingLeft: 10 }}>Present</th><th className="num">Away</th><th className="num">No check-in</th>
+                <th className="num" style={{ paddingLeft: 10 }}>Present</th><th className="num">Away</th><th className="num">Weekly offs</th><th className="num">No check-in</th>
               </tr></thead>
               <tbody>
                 {people.map((p) => {
@@ -141,15 +144,17 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
                       {days.map((d) => {
                         const r = at.get(`${p.id}|${d}`);
                         const hr = r?.hr_status ? HR_LABEL[r.hr_status] : null;
-                        const cls = hr ? "hr" : r?.in_at ? (r.in_on_site === false ? "away" : "on") : "miss";
-                        const txt = hr ? hr[0] : r?.in_at ? (r.in_on_site === false ? "!" : "✓") : d > today ? "" : isSun(d) ? "" : "·";
-                        const title = hr ? `${hr[1]}: ${r!.hr_note}` : r?.in_at ? `In ${ist(r.in_at)}${r.out_at ? `, out ${ist(r.out_at)}` : ""}` : "No check-in";
+                        const wo = !hr && !r?.in_at && r?.self_status === "week_off";
+                        const cls = hr || wo ? "hr" : r?.in_at ? (r.in_on_site === false ? "away" : "on") : "miss";
+                        const txt = hr ? hr[0] : wo ? "W" : r?.in_at ? (r.in_on_site === false ? "!" : "✓") : d > today ? "" : isSun(d) ? "" : "·";
+                        const title = hr ? `${hr[1]}: ${r!.hr_note}` : wo ? "Weekly off (marked by employee)"
+                          : r?.in_at ? `In ${ist(r.in_at)}${r.out_at ? `, out ${ist(r.out_at)}${istDay(r.out_at) !== d ? " next day" : ""}` : ""}` : "No check-in";
                         const selCls = searchParams.e === p.id && searchParams.d === d ? " sel" : "";
                         return <td key={d} className={isSun(d) ? "sun" : ""}>
-                          {d <= today ? <Link className={`c ${cls}${selCls}`} title={title} href={`?m=${m}&e=${p.id}&d=${d}#day`}>{txt}</Link> : null}
+                          {d <= today || wo ? <Link className={`c ${cls}${selCls}`} title={title} href={`?m=${m}&e=${p.id}&d=${d}#day`}>{txt}</Link> : null}
                         </td>;
                       })}
-                      <td className="num" style={{ paddingLeft: 10 }}><b>{c.present}</b></td><td className="num">{c.away || ""}</td><td className="num">{c.missing || ""}</td>
+                      <td className="num" style={{ paddingLeft: 10 }}><b>{c.present}</b></td><td className="num">{c.away || ""}</td><td className="num">{c.offs || ""}</td><td className="num">{c.missing || ""}</td>
                     </tr>
                   );
                 })}

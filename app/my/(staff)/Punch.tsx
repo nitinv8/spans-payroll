@@ -29,7 +29,7 @@ async function shrink(file: File): Promise<Blob> {
   return new Promise((res) => c.toBlob((b) => res(b || file), "image/jpeg", 0.7));
 }
 
-export default function Punch({ employeeId, kind, today }: { employeeId: string; kind: "in" | "out"; today: string }) {
+export default function Punch({ employeeId, kind, today, label, alt }: { employeeId: string; kind: "in" | "out"; today: string; label?: string; alt?: boolean }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const fix = useRef<Promise<Fix> | null>(null);
@@ -73,10 +73,14 @@ export default function Punch({ employeeId, kind, today }: { employeeId: string;
   return (
     <div>
       <input ref={input} type="file" accept="image/*" capture="user" onChange={onPhoto} hidden />
-      <button type="button" className={`punch ${kind === "out" ? "out" : ""}`} onClick={start} disabled={!!step}>
-        {step || (kind === "in" ? "Check in" : "Check out")}
-        {!step && <small>Takes a selfie and your location</small>}
-      </button>
+      {alt ? (
+        <button type="button" className="punch-alt" onClick={start} disabled={!!step}>{step || label || (kind === "in" ? "Check in" : "Check out")}</button>
+      ) : (
+        <button type="button" className={`punch ${kind === "out" ? "out" : ""}`} onClick={start} disabled={!!step}>
+          {step || label || (kind === "in" ? "Check in" : "Check out")}
+          {!step && <small>Takes a selfie and your location</small>}
+        </button>
+      )}
       {err && <div className="notice bad" style={{ marginTop: 10, marginBottom: 0 }}>{err}</div>}
       {done && <div className="notice ok" style={{ marginTop: 10, marginBottom: 0 }}>{done}</div>}
     </div>

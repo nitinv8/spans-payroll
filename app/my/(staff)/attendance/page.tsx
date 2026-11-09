@@ -36,14 +36,18 @@ export default async function MyAttendance({ searchParams }: { searchParams: { m
               <span className="k">{label}</span>
               <span className="v">
                 {d?.hr_status ? <span className={`pill ${d.hr_status === "absent" ? "bad" : "ok"}`}>{d.hr_status.replace("_", " ")} (HR)</span>
-                  : d?.in_at ? <>{timeIST(d.in_at)}–{d.out_at ? timeIST(d.out_at) : "…"} {d.in_on_site === false && <span className="pill warn">away</span>}</>
+                  : d?.in_at ? <>{timeIST(d.in_at)}–{d.out_at ? timeIST(d.out_at) : "…"}{d.out_at && nextDay(d.in_at, d.out_at) && <span className="muted small"> (next day)</span>} {d.in_on_site === false && <span className="pill warn">away</span>}</>
+                  : d?.self_status === "week_off" ? <span className="pill ok">Weekly off</span>
                   : sunday ? <span className="muted">Sunday</span> : <span className="muted">–</span>}
               </span>
             </div>
           );
         })}
       </div>
-      <p className="muted small">Missed a check-in? Tell HR the same day so they can mark it.</p>
+      <p className="muted small">Night shift? Check out from the Today screen after midnight; it counts on the day you checked in. Missed a check-in? Tell HR the same day so they can mark it.</p>
     </>
   );
 }
+
+const istDate = (iso: string) => new Date(Date.parse(iso) + 5.5 * 3600e3).toISOString().slice(0, 10);
+const nextDay = (inAt: string, outAt: string) => istDate(outAt) !== istDate(inAt);

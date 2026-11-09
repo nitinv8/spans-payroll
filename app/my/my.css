@@ -33,3 +33,12 @@
 .staff-btn:hover { text-decoration: none; }
 .staff input { font-size: 18px; padding: 12px; }
 .staff .muted.small { line-height: 1.5; }
+.weekoff { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.wo { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 0 6px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; color: var(--ink); font: inherit; font-size: 11px; min-height: 52px; cursor: pointer; }
+.wo b { font-size: 15px; }
+.wo small { font-size: 10px; font-weight: 700; }
+.wo.today { border-color: var(--brand); }
+.wo.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.wo:disabled { opacity: .45; cursor: default; }
+.punch-alt { display: block; width: 100%; margin-top: 10px; background: none; border: 0; color: var(--brand); font: inherit; font-size: 14px; text-decoration: underline; cursor: pointer; }
