@@ -34,3 +34,17 @@ export async function acknowledgePrivacy() {
   await supabaseServer().rpc("my_ack_privacy");
   redirect("/my");
 }
+
+/** Test reminder to the signed-in employee's own phones. */
+export async function sendMeTestReminder(): Promise<{ error?: string }> {
+  const { data: { user } } = await supabaseServer().auth.getUser();
+  const id = user?.app_metadata?.kind === "employee" ? String(user.app_metadata.employee_id || "") : "";
+  if (!id) return { error: "Please sign in again." };
+  try {
+    const { sendToEmployees } = await import("@/lib/push");
+    const r = await sendToEmployees([id], { title: "Spans Payroll", body: "Reminders are working. You'll get attendance reminders here.", tag: "test" });
+    return r.sent ? {} : { error: "Couldn't reach this phone. Try turning reminders off and on again." };
+  } catch (e) {
+    return { error: e instanceof OpError ? e.message : "Couldn't send a test right now." };
+  }
+}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Punch from "./Punch";
 import WeekOff, { type WeekDay } from "./WeekOff";
+import Reminders from "./Reminders";
 import { myDb, rupees, timeIST, todayIST, type MyDay, type MySlip } from "@/lib/my";
 import { monthLabel } from "@/lib/payroll";
 
@@ -70,6 +71,8 @@ export default async function Today() {
           {t?.hr_status && <p className="muted small" style={{ marginBottom: 0 }}>Marked by HR: {t.hr_status.replace("_", " ")}{t.hr_note ? ` (${t.hr_note})` : ""}</p>}
         </div>
       )}
+
+      {active && <Reminders compact />}
 
       {active && (
         <div className="staff-card">

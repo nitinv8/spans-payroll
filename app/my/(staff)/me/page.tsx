@@ -1,5 +1,6 @@
 import { myDb } from "@/lib/my";
 import { fmtDate } from "@/lib/data";
+import Reminders from "../Reminders";
 
 export default async function Me() {
   const { me } = await myDb();
@@ -20,6 +21,7 @@ export default async function Me() {
       {me.joining_letter_url && (
         <a className="staff-btn" style={{ width: "100%", marginBottom: 12 }} href={me.joining_letter_url} target="_blank" rel="noopener noreferrer">Joining letter ↗</a>
       )}
+      <Reminders />
       <p className="muted small">If anything here is wrong (for example a new bank account or mobile number), please tell HR. For your security, details can only be changed by HR.</p>
     </>
   );

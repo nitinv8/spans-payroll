@@ -3,7 +3,7 @@ import { pageDb, fmtDate } from "@/lib/data";
 import { daysInMonth, monthLabel } from "@/lib/payroll";
 import { sortEmployees, type Employee } from "@/lib/run-logic";
 import { mapsLink } from "@/lib/geo";
-import { markAttendance } from "@/app/actions";
+import { markAttendance, sendAttendanceReminder } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ const HR_LABEL: Record<string, [string, string]> = {
 };
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export default async function Attendance({ searchParams }: { searchParams: { m?: string; e?: string; d?: string } }) {
+export default async function Attendance({ searchParams }: { searchParams: { m?: string; e?: string; d?: string; reminded?: string; error?: string } }) {
   const { sb } = await pageDb();
   const today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
   const m = /^\d{4}-\d{2}$/.test(searchParams.m || "") ? searchParams.m! : today.slice(0, 7);
@@ -30,11 +30,18 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
     if (!error) await sb.from("attendance").update({ in_photo: null, out_photo: null }).in("id", old.map((r) => r.id));
   }
 
-  const [{ data: emps }, { data: rows }, { data: sites }] = await Promise.all([
+  const [{ data: emps }, { data: rows }, { data: sites }, { data: subs }] = await Promise.all([
     sb.from("employees").select("*"),
     sb.from("attendance").select("*").gte("day", first).lte("day", last),
     sb.from("sites").select("id, name"),
+    sb.from("push_subscriptions").select("employee_id, device, last_sent_at").like("endpoint", "https://%"),
   ]);
+  const phones = new Map<string, { device: string | null; last_sent_at: string | null }[]>();
+  for (const s of subs || []) phones.set(s.employee_id, [...(phones.get(s.employee_id) || []), s]);
+  // Who would get "Remind everyone" right now (needs the service key; skipped if reminders aren't set up)
+  let pending: { id: string; name: string }[] | null = null;
+  try { const push = await import("@/lib/push"); if (push.pushReady()) pending = await push.notCheckedInToday(); } catch { pending = null; }
+  const [rPeople, rSent, rNoPhone] = (searchParams.reminded || "").split("|");
   const siteName = (id: string | null) => sites?.find((s) => s.id === id)?.name ?? null;
   const withRows = new Set((rows || []).map((r) => r.employee_id));
   const people = sortEmployees(((emps || []) as Employee[]).filter((e) =>
@@ -96,11 +103,42 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
         </div>
       </div>
 
+      {searchParams.reminded && (
+        <div className={`notice ${Number(rSent) ? "ok" : "warn"}`}>
+          Reminder sent to {rSent} phone{rSent === "1" ? "" : "s"} for {rPeople} {rPeople === "1" ? "person" : "people"}.
+          {rNoPhone ? <> Not reached (reminders not turned on): <b>{rNoPhone}</b>.</> : null}
+        </div>
+      )}
+      {searchParams.error && <div className="notice bad">{searchParams.error}</div>}
+
+      {m === today.slice(0, 7) && (
+        <div className="panel row" style={{ alignItems: "center", gap: 14 }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <b>Reminders</b>{" "}
+            <span className="muted">
+              {people.filter((p) => (p as Row).app_access && p.status === "Active").filter((p) => phones.has(p.id)).length} of {people.filter((p) => (p as Row).app_access && p.status === "Active").length} staff with app access have reminders on.
+              Automatic: 10 AM if not checked in · check-out reminder 10 hours after check-in.
+            </span>
+            {pending && pending.length > 0 && <div className="small muted" style={{ marginTop: 4 }}>Not checked in yet today: {pending.map((x) => x.name).join(", ")}</div>}
+          </div>
+          <form action={sendAttendanceReminder}>
+            <button className="btn primary" disabled={pending !== null && pending.length === 0}>
+              {pending === null ? "Remind everyone not checked in" : pending.length ? `Remind ${pending.length} not checked in` : "Everyone has checked in"}
+            </button>
+          </form>
+        </div>
+      )}
+
       {selEmp && searchParams.d && (
         <div className="panel" id="day">
           <div className="pagehead" style={{ marginBottom: 10 }}>
             <h2 style={{ margin: 0 }}>{selEmp.name} · {fmtDate(searchParams.d)}</h2>
-            <Link className="btn sm" href={`?m=${m}`}>Close</Link>
+            <div className="row">
+              {searchParams.d === today && phones.has(selEmp.id) && (
+                <form action={sendAttendanceReminder}><input type="hidden" name="employee_id" value={selEmp.id} /><button className="btn sm">Send check-in reminder</button></form>
+              )}
+              <Link className="btn sm" href={`?m=${m}`}>Close</Link>
+            </div>
           </div>
           {sel?.in_at ? (
             <div className="row" style={{ gap: 28, alignItems: "flex-start" }}><Punch label="In" r={sel} k="in" /><Punch label="Out" r={sel} k="out" /></div>
@@ -140,7 +178,10 @@ export default async function Attendance({ searchParams }: { searchParams: { m?:
                   const c = count(p.id);
                   return (
                     <tr key={p.id}>
-                      <td className="name"><Link href={`/employees/${p.id}`}>{p.name}</Link>{!(p as Row).app_access && <div className="small muted">no app access</div>}</td>
+                      <td className="name"><Link href={`/employees/${p.id}`}>{p.name}</Link>
+                        {!(p as Row).app_access ? <div className="small muted">no app access</div>
+                          : phones.has(p.id) ? <div className="small" style={{ color: "var(--ok)" }} title={phones.get(p.id)!.map((x) => x.device).filter(Boolean).join(", ")}>🔔 reminders on</div>
+                          : <div className="small muted">reminders off</div>}</td>
                       {days.map((d) => {
                         const r = at.get(`${p.id}|${d}`);
                         const hr = r?.hr_status ? HR_LABEL[r.hr_status] : null;

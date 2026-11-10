@@ -410,3 +410,24 @@ export async function applyAttendanceDays(form: FormData) {
   revalidatePath(`/payroll/${runId}`);
   redirect(`/payroll/${runId}?saved=1`);
 }
+
+/** HR: push a check-in reminder to everyone who hasn't started work today, or to one employee. */
+export async function sendAttendanceReminder(form: FormData) {
+  await ctx(); // HR only
+  const push = await import("@/lib/push");
+  const one = str(form, "employee_id");
+  let ids: string[];
+  if (one) ids = [one];
+  else ids = (await attempt(push.notCheckedInToday())).map((e) => e.id);
+  if (!ids.length) fail("Everyone has checked in today (or is on a weekly off or a shift from last night).");
+  const r = await attempt(push.sendToEmployees(ids, {
+    title: "Mark your attendance",
+    body: "You haven't checked in today. Open Spans Payroll and tap Check in.",
+    tag: "checkin",
+  }));
+  const back = new URL(headers().get("referer") || "http://x/attendance");
+  for (const k of ["saved", "error", "reminded"]) back.searchParams.delete(k);
+  back.searchParams.set("reminded", `${r.people}|${r.sent}|${r.noPhone.join(", ")}`);
+  revalidatePath("/attendance");
+  redirect(back.pathname + back.search);
+}

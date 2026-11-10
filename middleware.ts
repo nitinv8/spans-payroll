@@ -70,4 +70,4 @@ export async function middleware(request: NextRequest) {
 }
 
 // The MCP endpoint and its discovery document check their own (OAuth bearer) sign-in.
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|icon-192.png|icon-512.png|icon-maskable-512.png|apple-icon.png|manifest.webmanifest|staff-icon.png|api/mcp|\\.well-known/).*)"] };
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|icon-192.png|icon-512.png|icon-maskable-512.png|apple-icon.png|manifest.webmanifest|staff-icon.png|api/mcp|api/cron|sw.js|\\.well-known/).*)"] };
